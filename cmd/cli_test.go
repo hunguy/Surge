@@ -693,7 +693,11 @@ func TestResumeAllDownloads(t *testing.T) {
 		{ID: "active-id", Status: "downloading"},
 		{ID: "paused-a", Status: "paused"},
 		{ID: "complete-id", Status: "completed"},
-		{ID: "failed-id", Status: "error"},
+		{ID: "errored-id", Status: "error"},
+		{ID: "failed-id", Status: "failed"},
+		{ID: "interrupted-id", Status: "interrupted"},
+		{ID: "canceled-id", Status: "canceled"},
+		{ID: "cancelled-id", Status: "cancelled"},
 	}
 	var resumedIDs []string
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -728,7 +732,7 @@ func TestResumeAllDownloads(t *testing.T) {
 	if err := resumeAllDownloads(); err != nil {
 		t.Fatalf("resumeAllDownloads() error = %v", err)
 	}
-	if got, want := strings.Join(resumedIDs, ","), "paused-a,paused-z"; got != want {
+	if got, want := strings.Join(resumedIDs, ","), "canceled-id,cancelled-id,errored-id,failed-id,interrupted-id,paused-a,paused-z"; got != want {
 		t.Fatalf("resumed IDs = %q, want %q", got, want)
 	}
 }

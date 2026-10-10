@@ -837,12 +837,12 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 	}
 }
 
-func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
+func TestUpdate_EnqueueErrorKeepsFailedDownloadResumableInQueuedTab(t *testing.T) {
 	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
 	optimistic.Destination = "/tmp/file.bin"
 
 	m := RootModel{
-		activeTab:      TabDone,
+		activeTab:      TabQueued,
 		downloads:      []*DownloadModel{optimistic},
 		list:           NewDownloadList(80, 20),
 		logViewport:    viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -861,14 +861,14 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 	if d.ID != "pending-1" {
 		t.Fatalf("download ID = %q, want pending-1", d.ID)
 	}
-	if !d.done {
-		t.Fatal("expected enqueue failure to mark the entry done")
+	if d.done {
+		t.Fatal("expected enqueue failure to remain resumable (not done)")
 	}
 	if !errors.Is(d.err, errTest) {
 		t.Fatalf("download err = %v, want %v", d.err, errTest)
 	}
 	if got := len(m2.getFilteredDownloads()); got != 1 {
-		t.Fatalf("done tab entries = %d, want 1 failed enqueue entry", got)
+		t.Fatalf("queued tab entries = %d, want 1 failed enqueue entry", got)
 	}
 }
 

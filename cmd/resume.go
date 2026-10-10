@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 var resumeCmd = &cobra.Command{
 	Use:   "resume <ID> | --all",
-	Short: "Resume a paused download",
-	Long:  `Resume a paused download by its ID. Use --all to resume all paused downloads.`,
+	Short: "Resume a paused or failed download",
+	Long:  `Resume a paused or failed download by its ID. Use --all to resume all resumable downloads.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, err := cmd.Flags().GetBool("all")
@@ -40,7 +41,16 @@ var resumeCmd = &cobra.Command{
 	},
 }
 
-// resumeAllDownloads resumes every paused download reported by the running
+func isResumableDownloadStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "paused", "error", "failed", "interrupted", "canceled", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
+// resumeAllDownloads resumes every resumable download reported by the running
 // server. The API only supports resuming one download at a time, so this keeps
 // the command compatible with older servers while still making --all useful.
 func resumeAllDownloads() error {
@@ -56,14 +66,14 @@ func resumeAllDownloads() error {
 
 	ids := make([]string, 0, len(downloads))
 	for _, download := range downloads {
-		if download.Status == "paused" {
+		if isResumableDownloadStatus(download.Status) {
 			ids = append(ids, download.ID)
 		}
 	}
 	sort.Strings(ids)
 
 	if len(ids) == 0 {
-		fmt.Println("No paused downloads to resume.")
+		fmt.Println("No resumable downloads to resume.")
 		return nil
 	}
 
@@ -98,5 +108,5 @@ func resumeAllDownloads() error {
 
 func init() {
 	rootCmd.AddCommand(resumeCmd)
-	resumeCmd.Flags().Bool("all", false, "Resume all paused downloads")
+	resumeCmd.Flags().Bool("all", false, "Resume all resumable downloads")
 }

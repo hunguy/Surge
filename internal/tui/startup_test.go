@@ -123,7 +123,7 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 }
 
-func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
+func TestTUI_Startup_LoadsErroredDownloadsAsResumableNotDone(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-tui-error-test")
 	if err != nil {
 		t.Fatal(err)
@@ -159,8 +159,8 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	if found == nil {
 		t.Fatal("TUI Model failed to load errored download")
 	}
-	if !found.done {
-		t.Fatal("expected errored download to appear in done tab")
+	if found.done {
+		t.Fatal("expected errored download to stay resumable (not done)")
 	}
 	if found.err == nil {
 		t.Fatal("expected errored download to retain its error")
@@ -207,6 +207,54 @@ func TestTUI_Startup_UsesFallbackForErroredDownloadWithoutMessage(t *testing.T) 
 	}
 	if found.err.Error() != "download failed" {
 		t.Errorf("error = %q, want %q", found.err.Error(), "download failed")
+	}
+}
+
+func TestTUI_Startup_MapsResumableFailureStatusesNotDone(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "surge-tui-resumable-failure-status-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	setupTestEnv(t, tmpDir)
+
+	statuses := []string{"failed", "interrupted", "canceled", "cancelled"}
+	for _, status := range statuses {
+		id := "tui-" + status + "-id"
+		dest := filepath.Join(tmpDir, status+".bin")
+		if err := store.AddToMasterList(types.DownloadRecord{
+			ID:       id,
+			URL:      "http://example.com/" + status + ".bin",
+			DestPath: dest,
+			Filename: filepath.Base(dest),
+			Status:   status,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mgr := orchestrator.NewLifecycleManager(nil, nil, nil)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, nil, false)
+
+	for _, status := range statuses {
+		id := "tui-" + status + "-id"
+		var found *DownloadModel
+		for _, d := range m.downloads {
+			if d.ID == id {
+				found = d
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("TUI Model failed to load %s download", status)
+		}
+		if found.done {
+			t.Fatalf("%s download should stay resumable (not done)", status)
+		}
+		if found.err == nil {
+			t.Fatalf("%s download should expose an error state for resume", status)
+		}
 	}
 }
 

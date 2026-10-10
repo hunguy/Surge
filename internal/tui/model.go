@@ -420,9 +420,10 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 			dm.done = true
 			dm.started = true
 			dm.progress.SetPercent(1.0)
-		case "error":
-			dm.done = true
-			dm.started = true
+		case "error", "failed", "interrupted", "canceled", "cancelled":
+			// Failed/interrupted entries stay resumable and should not appear in Done.
+			dm.done = false
+			dm.started = false
 			if s.Error != "" {
 				dm.err = errors.New(s.Error)
 			} else {

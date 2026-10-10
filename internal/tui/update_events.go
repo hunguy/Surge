@@ -114,7 +114,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.tempID != "" {
 			if d := m.FindDownloadByID(msg.tempID); d != nil {
 				d.err = msg.err
-				d.done = true
+				d.done = false
+				d.started = false
 				d.paused = false
 				d.pausing = false
 				d.resuming = false
@@ -126,7 +127,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				failed := NewDownloadModel(msg.tempID, "", "", 0)
 				failed.err = msg.err
-				failed.done = true
+				failed.done = false
+				failed.started = false
 				m.downloads = append(m.downloads, failed)
 			}
 			m.UpdateListItems()
@@ -254,14 +256,21 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.err = msg.Err
-			d.done = true
+			d.done = false
+			d.started = false
+			d.paused = false
+			d.pausing = false
+			d.resuming = false
+			d.Speed = 0
+			d.Connections = 0
 			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + d.Filename))
 			found = true
 		}
 		if !found {
 			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
 			newDownload.err = msg.Err
-			newDownload.done = true
+			newDownload.done = false
+			newDownload.started = false
 			m.downloads = append(m.downloads, newDownload)
 			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + msg.Filename))
 		}
