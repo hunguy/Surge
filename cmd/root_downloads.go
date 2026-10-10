@@ -190,7 +190,7 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		return
 	}
 
-	settings := getSettings()
+	settings := loadSettingsForRequest()
 	sharedPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, false, defaultOutputDir, settings))
 	requests := make([]types.DownloadEvent, 0, len(req.Downloads))
 
@@ -303,7 +303,7 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 }
 
 func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolvedDownloadRequest, error) {
-	settings := getSettings()
+	settings := loadSettingsForRequest()
 	req, err := decodeAndValidateDownloadRequest(r)
 	if err != nil {
 		return nil, err
@@ -326,6 +326,17 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		isDuplicate:   isDuplicate,
 		isActive:      isActive,
 	}, nil
+}
+
+// loadSettingsForRequest reloads persisted settings so long-lived daemons
+// honor runtime changes made by other clients (e.g. `surge connect`).
+func loadSettingsForRequest() *config.Settings {
+	settings, err := config.LoadSettings()
+	if err != nil {
+		utils.Debug("Warning: failed to reload settings for request: %v", err)
+		return getSettings()
+	}
+	return settings
 }
 
 func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {

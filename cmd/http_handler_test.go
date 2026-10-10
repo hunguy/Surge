@@ -254,6 +254,42 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	})
 }
 
+func TestResolveDownloadRequest_UsesLatestSavedDefaultDownloadDir(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	staleDefaultDir := t.TempDir()
+	updatedDefaultDir := t.TempDir()
+
+	staleSettings := config.DefaultSettings()
+	staleSettings.General.DefaultDownloadDir.Value = staleDefaultDir
+	if err := config.SaveSettings(staleSettings); err != nil {
+		t.Fatalf("SaveSettings(stale) failed: %v", err)
+	}
+
+	// Simulate a long-lived daemon keeping an in-memory snapshot from startup.
+	globalSettings = staleSettings
+
+	updatedSettings := config.DefaultSettings()
+	updatedSettings.General.DefaultDownloadDir.Value = updatedDefaultDir
+	if err := config.SaveSettings(updatedSettings); err != nil {
+		t.Fatalf("SaveSettings(updated) failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(`{"url":"http://example.com/file.bin"}`))
+	resolved, err := resolveDownloadRequest(req, "")
+	if err != nil {
+		t.Fatalf("resolveDownloadRequest failed: %v", err)
+	}
+
+	want := updatedDefaultDir
+	if abs, err := filepath.Abs(want); err == nil {
+		want = abs
+	}
+	if resolved.outPath != want {
+		t.Fatalf("resolved output path = %q, want %q", resolved.outPath, want)
+	}
+}
+
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
 	tests := []struct {
 		name                 string
