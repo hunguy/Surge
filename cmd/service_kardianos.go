@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -155,6 +156,68 @@ func serviceStatusLabel(status service.Status) string {
 // managing the service on Linux.
 const linuxSystemdPlatform = "linux-systemd"
 
+// darwinLaunchdPlatform is the platform name kardianos reports when launchd is
+// managing the service on macOS.
+const darwinLaunchdPlatform = "darwin-launchd"
+
+// darwinSystemDaemonDir is the directory launchd reads system LaunchDaemons
+// from. Surge registers there (through kardianos) because serviceConfig does not
+// opt into a per-user LaunchAgent. It is a variable so tests can point at a
+// temporary directory.
+var darwinSystemDaemonDir = "/Library/LaunchDaemons"
+
+// isElevatedFunc reports whether the process has root privileges. It is a
+// variable so tests can simulate an unprivileged user without changing the
+// process uid.
+var isElevatedFunc = isElevated
+
+// darwinLaunchDaemonPlistPath is the launchd unit Surge installs on macOS.
+func darwinLaunchDaemonPlistPath() string {
+	return filepath.Join(darwinSystemDaemonDir, serviceConfig.Name+".plist")
+}
+
+// explainDarwinNotInstalled returns a message when no launchd unit is
+// registered yet on macOS. launchctl reports a missing unit only as a cryptic
+// "Load failed: 5: Input/output error", so name the fix instead. It returns ""
+// when the service is installed or the platform is not macOS.
+func explainDarwinNotInstalled(s service.Service) string {
+	if s.Platform() != darwinLaunchdPlatform || serviceIsInstalled(s) {
+		return ""
+	}
+	return fmt.Sprintf("Surge is not registered as a service yet; install it first with 'sudo %s service install'",
+		executablePath())
+}
+
+// explainDarwinRootRequired explains why an unprivileged process cannot control
+// a system LaunchDaemon. launchctl reports this as the same cryptic I/O error it
+// uses for a missing unit and suggests the wrong fix, so name the real one. It
+// returns "" when the hint does not apply.
+func explainDarwinRootRequired(s service.Service, action string) string {
+	if s.Platform() != darwinLaunchdPlatform || isElevatedFunc() {
+		return ""
+	}
+	path := darwinLaunchDaemonPlistPath()
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"Surge is registered as a system LaunchDaemon (%s), which launchctl only lets root control; "+
+			"retry with elevated privileges, e.g. 'sudo %s service %s'",
+		path, executablePath(), action)
+}
+
+// withDarwinRootHint attaches the root-privileges explanation to a failed
+// launchd action, preserving the original error.
+func withDarwinRootHint(s service.Service, action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if hint := explainDarwinRootRequired(s, action); hint != "" {
+		return fmt.Errorf("%s: %w", hint, err)
+	}
+	return err
+}
+
 // runSystemctl invokes systemctl and returns its combined output. It is a
 // variable so tests can substitute a stub. Calling systemctl directly (rather
 // than through kardianos) preserves stderr, so a failed action surfaces
@@ -172,12 +235,15 @@ func systemdUnitName() string {
 // systemctl so a failure keeps systemd's error message; other service managers
 // fall back to the kardianos implementation.
 func runServiceAction(s service.Service, action string) error {
+	if note := explainDarwinNotInstalled(s); note != "" {
+		return errors.New(note)
+	}
 	if s.Platform() != linuxSystemdPlatform {
 		switch action {
 		case "start":
-			return s.Start()
+			return withDarwinRootHint(s, action, s.Start())
 		case "stop":
-			return s.Stop()
+			return withDarwinRootHint(s, action, s.Stop())
 		default:
 			return fmt.Errorf("unsupported service action %q", action)
 		}

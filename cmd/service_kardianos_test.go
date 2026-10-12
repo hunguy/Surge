@@ -5,6 +5,8 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -251,6 +253,128 @@ func TestRunServiceActionFallsBackOffSystemd(t *testing.T) {
 
 	assert.NoError(t, runServiceAction(s, "start"))
 	assert.True(t, s.startCalled)
+}
+
+// stubDarwinSystemDaemon registers a system LaunchDaemon plist in a temporary
+// directory and simulates an unprivileged user. Tests calling this must not use
+// t.Parallel(), because darwinSystemDaemonDir and isElevatedFunc are
+// package-scoped.
+func stubDarwinSystemDaemon(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	origDir := darwinSystemDaemonDir
+	origElevated := isElevatedFunc
+	t.Cleanup(func() {
+		darwinSystemDaemonDir = origDir
+		isElevatedFunc = origElevated
+	})
+	darwinSystemDaemonDir = dir
+	isElevatedFunc = func() bool { return false }
+	path := filepath.Join(dir, serviceConfig.Name+".plist")
+	if err := os.WriteFile(path, []byte("plist"), 0o644); err != nil {
+		t.Fatalf("write plist: %v", err)
+	}
+	return path
+}
+
+func TestRunServiceActionExplainsDarwinNotInstalled(t *testing.T) {
+	s := &mockService{
+		platform:  darwinLaunchdPlatform,
+		status:    service.StatusUnknown,
+		statusErr: service.ErrNotInstalled,
+	}
+
+	err := runServiceAction(s, "start")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not registered as a service")
+	assert.Contains(t, err.Error(), "service install")
+	assert.False(t, s.startCalled, "must not invoke launchctl when no unit is installed")
+}
+
+func TestRunServiceActionExplainsDarwinLaunchDaemonNeedsRoot(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	s.startFunc = func() error {
+		return fmt.Errorf("\"launchctl\" failed with stderr: Load failed: 5: Input/output error")
+	}
+
+	err := runServiceAction(s, "start")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "system LaunchDaemon")
+	assert.Contains(t, err.Error(), "sudo")
+	assert.Contains(t, err.Error(), "service start")
+	assert.Contains(t, err.Error(), "Input/output error", "the launchctl error should be preserved")
+}
+
+func TestExplainDarwinRootRequiredUsesActionName(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+
+	hint := explainDarwinRootRequired(&mockService{platform: darwinLaunchdPlatform}, "stop")
+	assert.Contains(t, hint, "service stop")
+}
+
+func TestExplainDarwinRootRequiredSkipsWhenRoot(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+	isElevatedFunc = func() bool { return true }
+
+	assert.Empty(t, explainDarwinRootRequired(&mockService{platform: darwinLaunchdPlatform}, "start"))
+}
+
+func TestExplainDarwinRootRequiredSkipsWithoutDaemonAndOtherPlatforms(t *testing.T) {
+	// Simulate an unprivileged user with no LaunchDaemon plist on disk.
+	origDir := darwinSystemDaemonDir
+	origElevated := isElevatedFunc
+	t.Cleanup(func() {
+		darwinSystemDaemonDir = origDir
+		isElevatedFunc = origElevated
+	})
+	darwinSystemDaemonDir = t.TempDir()
+	isElevatedFunc = func() bool { return false }
+
+	assert.Empty(t, explainDarwinRootRequired(&mockService{platform: darwinLaunchdPlatform}, "start"))
+	assert.Empty(t, explainDarwinRootRequired(&mockService{platform: linuxSystemdPlatform}, "start"))
+	assert.Empty(t, explainDarwinNotInstalled(&mockService{platform: linuxSystemdPlatform}))
+}
+
+func TestServiceStartCmdExplainsDarwinLaunchDaemonNeedsRoot(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	s.startFunc = func() error {
+		return fmt.Errorf("\"launchctl\" failed with stderr: Load failed: 5: Input/output error")
+	}
+	withStubbedService(t, s, 0)
+
+	var runErr error
+	out := captureStdout(t, func() {
+		runErr = serviceStartCmd.RunE(serviceStartCmd, nil)
+	})
+
+	assert.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "sudo")
+	assert.NotContains(t, out, "Service started successfully")
+}
+
+func TestServiceStartCmdLeavesLinuxBehaviorAlone(t *testing.T) {
+	s := &mockService{
+		platform:  linuxSystemdPlatform,
+		status:    service.StatusUnknown,
+		statusErr: service.ErrNotInstalled,
+	}
+	withStubbedService(t, s, 0)
+	stubRunSystemctl(t, func(args ...string) (string, error) {
+		return "Failed to start surge.service: Unit surge.service not found.\n", fmt.Errorf("exit status 1")
+	})
+
+	var runErr error
+	_ = captureStdout(t, func() {
+		runErr = serviceStartCmd.RunE(serviceStartCmd, nil)
+	})
+
+	assert.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "systemctl start", "systemd must keep reporting its own error")
+	assert.NotContains(t, runErr.Error(), "not registered as a service")
 }
 
 func TestExplainServiceNotRunningReportsUnmetCondition(t *testing.T) {
