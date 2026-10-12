@@ -3,12 +3,13 @@ package clipboard
 import (
 	"regexp"
 	"strings"
-
-	"github.com/atotto/clipboard"
 )
 
-var clipboardReadAll = clipboard.ReadAll
-var clipboardWriteAll = clipboard.WriteAll
+// clipboardReadAll and clipboardWriteAll are the platform clipboard
+// implementations, defined per OS in backend_linux.go and backend_other.go.
+// They are package variables so tests can stub the system clipboard.
+var clipboardReadAll = readAll
+var clipboardWriteAll = writeAll
 
 // Read returns the current text content of the system clipboard.
 func Read() (string, error) {
