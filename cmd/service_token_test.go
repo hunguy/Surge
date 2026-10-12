@@ -193,6 +193,38 @@ func TestReadSystemServiceToken_ErrorWhenMissing(t *testing.T) {
 	assert.Error(t, err, "readSystemServiceToken should error when no token file exists")
 }
 
+// The daemon mirrors the token to a world-readable runtime path so non-root
+// clients can read it without elevated privileges. readSystemServiceToken must
+// fall back to that mirror when the 0600 system-state file is unreadable.
+func TestReadSystemServiceToken_FallsBackToRuntimeMirror(t *testing.T) {
+	dirs := isolateTokenEnv(t)
+	runtimeDir := t.TempDir()
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", runtimeDir)
+
+	// The system-state file is intentionally absent; only the runtime mirror exists.
+	assert.NoFileExists(t, filepath.Join(dirs.systemState, "token"))
+
+	const want = "runtime-mirrored-token"
+	require.NoError(t, writeTokenToFile(filepath.Join(runtimeDir, "token"), want))
+
+	got, err := readSystemServiceToken()
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestReadSystemServiceToken_PrefersStateDir(t *testing.T) {
+	dirs := isolateTokenEnv(t)
+	runtimeDir := t.TempDir()
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", runtimeDir)
+
+	writeSystemTokenTo(t, dirs.systemState, "state-token")
+	require.NoError(t, writeTokenToFile(filepath.Join(runtimeDir, "token"), "runtime-token"))
+
+	got, err := readSystemServiceToken()
+	require.NoError(t, err)
+	assert.Equal(t, "state-token", got)
+}
+
 // ---------------------------------------------------------------------------
 // resolveTokenForConnectTarget — trusted local daemon discovery
 // ---------------------------------------------------------------------------

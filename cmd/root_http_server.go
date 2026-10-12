@@ -209,12 +209,20 @@ func ensureSystemToken() (string, error) {
 	return token, nil
 }
 
-// readSystemServiceToken reads the token from the system state directory
-// without generating one.  Returns an error if the file doesn't exist or
-// isn't readable (the caller may need elevated privileges).
+// readSystemServiceToken reads the token used by the system service daemon
+// without generating one.  It prefers the system state directory and falls back
+// to the world-readable mirror the daemon writes to the system runtime dir, so
+// non-root clients can retrieve it without elevated privileges.
 func readSystemServiceToken() (string, error) {
-	tokenFile := filepath.Join(config.GetSystemStateDir(), "token")
-	return readTokenFromFile(tokenFile)
+	stateTokenFile := filepath.Join(config.GetSystemStateDir(), "token")
+	if token, err := readTokenFromFile(stateTokenFile); err == nil {
+		return token, nil
+	}
+	runtimeTokenFile := filepath.Join(config.GetSystemRuntimeDir(), "token")
+	if token, err := readTokenFromFile(runtimeTokenFile); err == nil {
+		return token, nil
+	}
+	return "", fmt.Errorf("system service token not found (looked in %s and %s)", stateTokenFile, runtimeTokenFile)
 }
 
 func readTokenFromFile(path string) (string, error) {

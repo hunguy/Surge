@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -25,6 +26,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/adrg/xdg"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -646,7 +648,30 @@ func performRestart(releaseLock func()) error {
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
+	ensureUserHomeEnv()
 	return rootCmd.Execute()
+}
+
+// ensureUserHomeEnv gives the process a usable HOME when it has none. A systemd
+// system service starts without HOME, which makes the XDG library resolve config
+// and state paths under "/" (read-only on image-based distros such as Bazzite),
+// crashing the daemon with "mkdir /.config: read-only file system". Fall back to
+// the account database and refresh the XDG paths so they point at a real home.
+func ensureUserHomeEnv() {
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if filepath.IsAbs(home) && home != string(filepath.Separator) {
+		return
+	}
+	u, err := user.Current()
+	if err != nil {
+		return
+	}
+	accountHome := strings.TrimSpace(u.HomeDir)
+	if accountHome == "" {
+		return
+	}
+	_ = os.Setenv("HOME", accountHome)
+	xdg.Reload()
 }
 
 func init() {

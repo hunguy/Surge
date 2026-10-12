@@ -4,8 +4,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/kardianos/service"
@@ -80,6 +84,19 @@ var GetService = func() (service.Service, error) {
 	return service.New(prg, serviceConfig)
 }
 
+// executablePath returns the absolute path of the running Surge binary. It is
+// used in hints so users can elevate with a path sudo can resolve, since sudo's
+// secure_path often excludes user directories such as ~/.local/bin.
+func executablePath() string {
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		return exe
+	}
+	if len(os.Args) > 0 && os.Args[0] != "" {
+		return os.Args[0]
+	}
+	return "surge"
+}
+
 func runAction(action func(service.Service) error, successMsg string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		s, err := GetService()
@@ -96,6 +113,267 @@ func runAction(action func(service.Service) error, successMsg string) func(*cobr
 	}
 }
 
+// serviceStartTimeout bounds how long `service start` waits for the service
+// manager to report the service as running. It is a variable so tests can
+// shorten it.
+var serviceStartTimeout = 3 * time.Second
+
+const serviceStartPollInterval = 100 * time.Millisecond
+
+// waitForServiceRunning polls the service manager until the service reports
+// that it is running or the timeout elapses. It returns the last observed
+// status so callers can explain why the start did not take effect.
+func waitForServiceRunning(s service.Service, timeout time.Duration) service.Status {
+	deadline := time.Now().Add(timeout)
+	last := service.StatusUnknown
+	for {
+		if status, err := s.Status(); err == nil {
+			last = status
+			if status == service.StatusRunning {
+				return status
+			}
+		}
+		if !time.Now().Before(deadline) {
+			return last
+		}
+		time.Sleep(serviceStartPollInterval)
+	}
+}
+
+func serviceStatusLabel(status service.Status) string {
+	switch status {
+	case service.StatusRunning:
+		return "running"
+	case service.StatusStopped:
+		return "stopped"
+	default:
+		return "unknown"
+	}
+}
+
+// linuxSystemdPlatform is the platform name kardianos reports when systemd is
+// managing the service on Linux.
+const linuxSystemdPlatform = "linux-systemd"
+
+// runSystemctl invokes systemctl and returns its combined output. It is a
+// variable so tests can substitute a stub. Calling systemctl directly (rather
+// than through kardianos) preserves stderr, so a failed action surfaces
+// systemd's own message instead of a bare "exit status 1".
+var runSystemctl = func(args ...string) (string, error) {
+	out, err := exec.Command("systemctl", args...).CombinedOutput()
+	return string(out), err
+}
+
+func systemdUnitName() string {
+	return serviceConfig.Name + ".service"
+}
+
+// runServiceAction starts or stops the service. On systemd it shells out to
+// systemctl so a failure keeps systemd's error message; other service managers
+// fall back to the kardianos implementation.
+func runServiceAction(s service.Service, action string) error {
+	if s.Platform() != linuxSystemdPlatform {
+		switch action {
+		case "start":
+			return s.Start()
+		case "stop":
+			return s.Stop()
+		default:
+			return fmt.Errorf("unsupported service action %q", action)
+		}
+	}
+	unit := systemdUnitName()
+	out, err := runSystemctl(action, unit)
+	if err != nil {
+		if msg := strings.TrimSpace(out); msg != "" {
+			return fmt.Errorf("systemctl %s %s failed: %s", action, unit, msg)
+		}
+		return fmt.Errorf("systemctl %s %s failed: %w", action, unit, err)
+	}
+	return nil
+}
+
+// serviceIsInstalled reports whether the service is already registered with the
+// OS service manager.
+func serviceIsInstalled(s service.Service) bool {
+	_, err := s.Status()
+	return err == nil || !errors.Is(err, service.ErrNotInstalled)
+}
+
+// reinstallService removes and re-registers the service so an existing unit is
+// refreshed, for example after the Surge binary moved on upgrade.
+func reinstallService(s service.Service) error {
+	// Best-effort stop: the Windows SCM refuses to remove a running service,
+	// and a stale unit may still be holding a running process.
+	_ = s.Stop()
+	if err := s.Uninstall(); err != nil {
+		return fmt.Errorf("refresh service: uninstall failed: %w", err)
+	}
+	if err := s.Install(); err != nil {
+		return fmt.Errorf("refresh service: install failed: %w", err)
+	}
+	return nil
+}
+
+// explainServiceNotRunning returns a human-readable note when an installed
+// systemd unit is not running because a start condition was not met (for
+// example a stale ConditionFileIsExecutable after the binary moved). It returns
+// "" when there is nothing useful to add or systemd is not the service manager.
+func explainServiceNotRunning(s service.Service) string {
+	if s.Platform() != linuxSystemdPlatform {
+		return ""
+	}
+	unit := systemdUnitName()
+	props, err := runSystemctl("show", unit, "--property=ConditionResult")
+	if err != nil && strings.TrimSpace(props) == "" {
+		return ""
+	}
+	if !strings.Contains(props, "ConditionResult=no") {
+		return ""
+	}
+	msg := "The installed unit was skipped because a start condition was not met"
+	if detail := systemdConditionDetail(unit); detail != "" {
+		msg += " (" + detail + ")"
+	}
+	return msg + ". Re-register it with 'surge service install' to point at the current binary."
+}
+
+// systemdConditionDetail extracts the human-readable condition failure from
+// `systemctl status`; newer systemd hides it from `systemctl show`.
+func systemdConditionDetail(unit string) string {
+	out, _ := runSystemctl("status", unit, "--no-pager", "-l")
+	if out == "" {
+		return ""
+	}
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "Condition:") {
+			continue
+		}
+		detail := strings.TrimSpace(strings.TrimPrefix(trimmed, "Condition:"))
+		// The reason is indented on the following lines, e.g.
+		//   Condition: start condition unmet at ...
+		//              └─ ConditionFileIsExecutable=/old/path was not met
+		for _, next := range lines[i+1:] {
+			cont := strings.TrimSpace(next)
+			if !strings.HasPrefix(cont, "\u2514\u2500") {
+				break
+			}
+			detail += " " + strings.TrimSpace(strings.TrimPrefix(cont, "\u2514\u2500"))
+		}
+		return detail
+	}
+	return ""
+}
+
+// parseSystemctlProperties parses `systemctl show` output (KEY=VALUE lines).
+func parseSystemctlProperties(out string) map[string]string {
+	props := make(map[string]string)
+	for _, line := range strings.Split(out, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		props[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return props
+}
+
+// systemdUnitProperties reads the systemd state used to judge service health.
+// The bool is false when the query fails and produced no output.
+func systemdUnitProperties() (map[string]string, bool) {
+	out, err := runSystemctl("show", systemdUnitName(),
+		"--property=ActiveState", "--property=SubState",
+		"--property=ExecMainStatus", "--property=ConditionResult")
+	if err != nil && strings.TrimSpace(out) == "" {
+		return nil, false
+	}
+	return parseSystemctlProperties(out), true
+}
+
+// systemdFailureFromProps reports a terminal failure described by props, or ""
+// when the unit is not in a failed or auto-restart state.
+func systemdFailureFromProps(props map[string]string) string {
+	switch {
+	case props["ActiveState"] == "failed":
+		return systemdFailureSummary("systemd reports the unit as failed", props)
+	case props["SubState"] == "auto-restart":
+		return systemdFailureSummary("systemd is repeatedly restarting it after a failed start", props)
+	default:
+		return ""
+	}
+}
+
+// systemdUnitFailureReason returns a human-readable reason when systemd reports
+// the unit is not actually working — crash-looping (auto-restart) or failed —
+// even though kardianos reports StatusRunning because it maps systemd's
+// "activating" state to running. It returns "" for non-systemd platforms and
+// for a healthy unit.
+func systemdUnitFailureReason(s service.Service) string {
+	if s.Platform() != linuxSystemdPlatform {
+		return ""
+	}
+	props, ok := systemdUnitProperties()
+	if !ok {
+		return ""
+	}
+	return systemdFailureFromProps(props)
+}
+
+// systemdStartStability is how long a systemd unit must stay active before a
+// start counts as successful. It guards against Type=simple units that report
+// "active" for a moment and then exit. It is a variable so tests can skip it.
+var systemdStartStability = time.Second
+
+// waitForSystemdHealthy waits until the systemd unit is stably active. It
+// returns "" on success, or a failure reason when the unit fails, crash-loops,
+// or never becomes active within the timeout.
+func waitForSystemdHealthy(s service.Service, timeout, stability time.Duration) string {
+	if s.Platform() != linuxSystemdPlatform {
+		return ""
+	}
+	deadline := time.Now().Add(timeout)
+	var activeSince time.Time
+	var last map[string]string
+	for {
+		if props, ok := systemdUnitProperties(); ok {
+			last = props
+			if reason := systemdFailureFromProps(props); reason != "" {
+				return reason
+			}
+			if props["ActiveState"] == "active" {
+				if activeSince.IsZero() {
+					activeSince = time.Now()
+				}
+				if time.Since(activeSince) >= stability {
+					return ""
+				}
+			} else {
+				activeSince = time.Time{}
+			}
+		}
+		if !time.Now().Before(deadline) {
+			if !activeSince.IsZero() {
+				return ""
+			}
+			if note := explainServiceNotRunning(s); note != "" {
+				return note
+			}
+			return systemdFailureSummary("systemd did not report the unit as running", last)
+		}
+		time.Sleep(serviceStartPollInterval)
+	}
+}
+
+func systemdFailureSummary(prefix string, props map[string]string) string {
+	msg := prefix
+	if code := props["ExecMainStatus"]; code != "" && code != "0" {
+		msg += fmt.Sprintf(" (last exit status %s)", code)
+	}
+	return msg + ". Run 'systemctl status " + systemdUnitName() + "' for details."
+}
+
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install Surge as a system service",
@@ -104,14 +382,29 @@ var serviceInstallCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		refreshed := false
 		if err := s.Install(); err != nil {
-			return err
+			// kardianos refuses to overwrite an existing unit. When the service
+			// is already registered, re-register it so the unit is refreshed
+			// (e.g. after the binary moved on upgrade) instead of failing with a
+			// cryptic "already exists" error. A genuine failure (service not
+			// installed) is returned as-is so we don't mask it.
+			if !serviceIsInstalled(s) {
+				return err
+			}
+			if rerr := reinstallService(s); rerr != nil {
+				return rerr
+			}
+			refreshed = true
 		}
 		// Pre-generate the service token in the system state directory so
 		// that `surge token` / `surge connect` can discover it without users
 		// having to use --token manually.
 		token, tokenErr := ensureSystemToken()
 		fmt.Println("Service installed successfully")
+		if refreshed {
+			fmt.Println("Refreshed the existing unit to use the current Surge executable.")
+		}
 		if tokenErr == nil {
 			fmt.Printf("Service auth token: %s\n", token)
 			fmt.Println("Use 'surge service token' to print this token again.")
@@ -136,13 +429,44 @@ var serviceUninstallCmd = &cobra.Command{
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the Surge system service",
-	RunE:  runAction(func(s service.Service) error { return s.Start() }, "Service started successfully"),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := GetService()
+		if err != nil {
+			return err
+		}
+		if err := runServiceAction(s, "start"); err != nil {
+			return err
+		}
+		// Service managers can report success from Start() without the process
+		// ever staying up. systemd silently skips a unit whose
+		// ConditionFileIsExecutable no longer matches, maps a crash-looping
+		// unit's "activating" state to running, and can report "active" for a
+		// Type=simple unit that exits moments later. Verify it is actually up.
+		if s.Platform() == linuxSystemdPlatform {
+			if reason := waitForSystemdHealthy(s, serviceStartTimeout, systemdStartStability); reason != "" {
+				return fmt.Errorf("service failed to start: %s", reason)
+			}
+		} else if status := waitForServiceRunning(s, serviceStartTimeout); status != service.StatusRunning {
+			if note := explainServiceNotRunning(s); note != "" {
+				return fmt.Errorf("service did not start (status: %s); %s", serviceStatusLabel(status), note)
+			}
+			return fmt.Errorf(
+				"service did not start (status: %s); the installed unit may be stale, "+
+					"for example pointing at an old binary path. Re-register it with "+
+					"'surge service uninstall' followed by 'surge service install', "+
+					"then confirm with 'surge service status'",
+				serviceStatusLabel(status),
+			)
+		}
+		fmt.Println("Service started successfully")
+		return nil
+	},
 }
 
 var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the Surge system service",
-	RunE:  runAction(func(s service.Service) error { return s.Stop() }, "Service stopped successfully"),
+	RunE:  runAction(func(s service.Service) error { return runServiceAction(s, "stop") }, "Service stopped successfully"),
 }
 
 // isSystemServiceRunning checks if the Kardianos service is currently running.
@@ -161,10 +485,27 @@ var serviceStatusCmd = &cobra.Command{
 	RunE: runAction(func(s service.Service) error {
 		status, err := s.Status()
 		if err != nil {
+			// systemd surfaces a failed unit as a Status error rather than a
+			// state; turn it into a readable diagnosis instead of the raw error.
+			if reason := systemdUnitFailureReason(s); reason != "" {
+				fmt.Printf("Service is not running: %s\n", reason)
+				return nil
+			}
+			if note := explainServiceNotRunning(s); note != "" {
+				fmt.Printf("Service is not running: %s\n", note)
+				return nil
+			}
 			return err
 		}
 		switch status {
 		case service.StatusRunning:
+			// kardianos reports StatusRunning for systemd's "activating"
+			// state, which also covers a unit stuck in auto-restart after a
+			// crash. Report the truth instead of a stale "running".
+			if reason := systemdUnitFailureReason(s); reason != "" {
+				fmt.Printf("Service is not running: %s\n", reason)
+				return nil
+			}
 			pid := readPIDFile(config.GetSystemRuntimeDir())
 			port := readPortFile(config.GetSystemRuntimeDir())
 			if pid > 0 && port > 0 {
@@ -178,6 +519,9 @@ var serviceStatusCmd = &cobra.Command{
 			}
 		case service.StatusStopped:
 			fmt.Println("Service is stopped")
+			if note := explainServiceNotRunning(s); note != "" {
+				fmt.Println(note)
+			}
 		default:
 			fmt.Println("Service is not installed or status is unknown")
 		}
@@ -200,13 +544,18 @@ The system service (installed with 'surge service install') stores its token
 separately from the interactive-user token. Use this command to retrieve it
 when connecting via 'surge connect' or setting up the browser extension.
 
-Note: reading the system token file may require elevated privileges (sudo).`,
+The running daemon also mirrors the token to a world-readable path in the
+system runtime directory, so elevated privileges are usually not required. If
+the token still cannot be read, retry with sudo and the full path to the surge
+binary.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token, err := readSystemServiceToken()
 		if err != nil {
 			var hint string
 			if !isElevated() {
-				hint = " (try running with sudo/administrator privileges)"
+				// sudo's secure_path often excludes user dirs like ~/.local/bin,
+				// so suggest the absolute path to the running binary.
+				hint = fmt.Sprintf(" (retry with elevated privileges, e.g. 'sudo %s service token')", executablePath())
 			}
 			return fmt.Errorf("could not read system service token%s: %w", hint, err)
 		}

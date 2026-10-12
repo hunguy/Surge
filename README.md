@@ -134,6 +134,49 @@ surge service uninstall
 > [!NOTE]
 > On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
 
+#### Reinstalling the service after a code change (Linux + SELinux)
+
+On SELinux-enforcing distros such as **Bazzite** or Fedora Atomic, a system
+service can only execute a binary that lives in a system path. A binary in your
+home directory is labelled `user_home_t`, and systemd fails it with
+`status=203/EXEC` (`Permission denied`). Symlinking it into `/usr/local/bin`
+does **not** help, because systemd resolves the link back to the home-directory
+file. After changing the code, rebuild and redeploy a real copy, then refresh
+the unit:
+
+```bash
+cd ~/Code/Surge
+go build -o surge .
+
+# Copy a real file (not a symlink) into a system path so it gets the bin_t label
+sudo install -m 0755 ./surge /usr/local/bin/surge
+sudo restorecon -v /usr/local/bin/surge
+
+# Refresh the unit (rewrites ExecStart/ConditionFileIsExecutable to the current path)
+sudo /usr/local/bin/surge service install
+
+# Restart and verify
+sudo /usr/local/bin/surge service start
+surge service status
+
+# Attach the TUI to the running service
+surge connect
+```
+
+- Run `service install`/`start` through the **installed** path
+  (`/usr/local/bin/surge`), never `sudo ./surge` from the repo — otherwise
+  `ExecStart` points back at the home directory and SELinux blocks it again.
+- `surge service install` refreshes an existing unit in place, so
+  `service uninstall` is not required first.
+- Stop using a Homebrew-installed binary before switching to a source build, and
+  remove any leftover `/usr/local/bin/surge` symlink (`sudo rm -f …`) so the copy
+  above replaces it with a real file.
+- The daemon uses the service user's home for config/state (`/root/...`) and
+  writes runtime files (port/token) to `/run/surge`, so `surge connect`
+  auto-detects it without `sudo`.
+- If the service still will not stay up, inspect the journal:
+  `journalctl -u surge.service -n 50 --no-pager`.
+
 ### 4. Remote TUI
 
 `surge` and `surge server` bind the HTTP API to `0.0.0.0` (all interfaces) by default.
