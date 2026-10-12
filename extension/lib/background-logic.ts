@@ -1,29 +1,17 @@
 export interface PendingDup {
   url: string;
   filename: string;
-  directory: string;
   timestamp: number;
 }
 
-export function extractPathInfo(downloadItem: { filename?: string }): { filename: string; directory: string } {
-  if (!downloadItem.filename) return { filename: '', directory: '' };
+// The browser's announced download directory is deliberately ignored: Surge owns
+// the destination and resolves it from its configured default download dir (and
+// category routing), so only the file name hint is worth extracting here.
+export function extractFilename(downloadItem: { filename?: string }): string {
+  if (!downloadItem.filename) return '';
 
   const normalized = downloadItem.filename.replace(/\\/g, '/');
-  const parts = normalized.split('/');
-  const filename = parts.pop() || '';
-
-  let directory = '';
-  if (parts.length > 0) {
-    if (/^[A-Za-z]:$/.test(parts[0])) {
-      directory = parts.join('/');
-    } else if (parts[0] === '') {
-      directory = '/' + parts.slice(1).join('/');
-    } else {
-      directory = parts.join('/');
-    }
-  }
-
-  return { filename, directory };
+  return normalized.split('/').pop() || '';
 }
 
 export function coerceStoredBoolean(value: unknown): boolean | undefined {
@@ -113,23 +101,23 @@ export async function findReachableCandidate<T extends string>(
 interface DownloadRequestBodyOptions {
   url: string;
   filename: string;
-  directory: string;
   headers: Record<string, string>;
   skipApproval?: boolean;
   skipDuplicateWarning?: boolean;
 }
 
+// No "path" is sent on purpose. A browser-derived path is not a destination the
+// user asked for, and the backend already resolves omitted paths to the default
+// download directory from settings; letting the browser pick would silently
+// override that setting.
 export function buildDownloadRequestBody(opts: DownloadRequestBodyOptions): Record<string, unknown> {
-  const body: Record<string, unknown> = {
+  return {
     url: opts.url,
     filename: opts.filename,
     headers: Object.keys(opts.headers).length > 0 ? opts.headers : undefined,
     skip_approval: opts.skipApproval === true ? true : undefined,
     skip_duplicate_warning: opts.skipDuplicateWarning === true ? true : undefined,
   };
-
-  if (opts.directory) body.path = opts.directory;
-  return body;
 }
 
 export function filterPendingDuplicates(
@@ -158,7 +146,6 @@ interface QueueDuplicateDownloadOptions {
   pendingDuplicateCounter: number;
   url: string;
   filename: string;
-  directory: string;
   persistPendingDuplicates: () => Promise<void>;
   updateBadge: () => void;
   openPopup: () => Promise<void>;
@@ -173,7 +160,6 @@ export async function queueDuplicateDownload(opts: QueueDuplicateDownloadOptions
   opts.pendingDuplicates.set(pendingId, {
     url: opts.url,
     filename: opts.filename,
-    directory: opts.directory,
     timestamp: opts.now?.() ?? Date.now(),
   });
 

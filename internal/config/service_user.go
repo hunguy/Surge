@@ -25,8 +25,8 @@ var (
 // and download paths from root's account, ignoring the configuration the
 // desktop user actually sees. Detection is best-effort: an explicit
 // SURGE_SERVICE_USER override (username or absolute home path) wins, then the
-// owner of a /run/user/<uid> session directory, then the first regular account
-// in /etc/passwd that owns a real home.
+// owner of the macOS console, then the owner of a /run/user/<uid> session
+// directory, then the first regular account in /etc/passwd that owns a real home.
 func PrimaryUserHome() string {
 	if geteuidFn() != 0 {
 		return ""
@@ -37,8 +37,8 @@ func PrimaryUserHome() string {
 // ServiceUserDownloadDir returns the primary desktop user's configured default
 // download directory, falling back to their ~/Downloads or home directory. It
 // returns "" when no desktop user can be determined. This lets the root system
-// service honor the user's settings.toml instead of writing to its own home (or
-// worse, to "/" when none is configured).
+// service honor the user's settings.toml instead of writing to its own home: on
+// Linux to "/" (read-only on image-based distros) and on macOS to /var/root.
 func ServiceUserDownloadDir() string {
 	home := PrimaryUserHome()
 	if home == "" {
@@ -55,15 +55,22 @@ func ServiceUserDownloadDir() string {
 }
 
 // readUserDefaultDownloadDir reads general.default_download_dir from the user's
-// Surge settings.toml. It returns "" when the file is missing, unreadable, or
-// does not carry an absolute directory.
+// Surge settings.toml. It returns "" when no candidate file is readable or none
+// carries an absolute directory.
 func readUserDefaultDownloadDir(home string) string {
-	path := filepath.Join(home, ".config", "surge", "settings.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
+	for _, path := range userSettingsTomlCandidates(home) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if dir := parseUserDefaultDownloadDir(data); dir != "" {
+			return dir
+		}
 	}
+	return ""
+}
 
+func parseUserDefaultDownloadDir(data []byte) string {
 	var parsed struct {
 		General struct {
 			DefaultDownloadDir string `toml:"default_download_dir"`
@@ -80,6 +87,24 @@ func readUserDefaultDownloadDir(home string) string {
 	return filepath.Clean(dir)
 }
 
+// userSettingsTomlCandidates lists the settings.toml locations Surge writes for a
+// user home, most authoritative first: the XDG config home (honored on every
+// platform when the user sets XDG_CONFIG_HOME, which is why it leads), then the
+// macOS application-support directory, then the Windows roaming profile.
+// Cross-platform paths that do not exist are simply skipped, so a macOS service
+// does not need to know how the user launched their own Surge process.
+func userSettingsTomlCandidates(home string) []string {
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return nil
+	}
+	return []string{
+		filepath.Join(home, ".config", "surge", "settings.toml"),
+		filepath.Join(home, "Library", "Application Support", "surge", "settings.toml"),
+		filepath.Join(home, "AppData", "Roaming", "surge", "settings.toml"),
+	}
+}
+
 func detectPrimaryUserHome() string {
 	// Explicit override: a username, or an absolute home directory.
 	if override := strings.TrimSpace(os.Getenv("SURGE_SERVICE_USER")); override != "" {
@@ -92,6 +117,9 @@ func detectPrimaryUserHome() string {
 		return ""
 	}
 
+	if home := detectHomeFromConsole(); home != "" {
+		return home
+	}
 	if home := detectHomeFromRuntimeDir(); home != "" {
 		return home
 	}

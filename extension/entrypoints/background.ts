@@ -13,7 +13,7 @@ import {
   buildEventStreamHeaders,
   buildPortScanCandidates,
   coerceStoredBoolean,
-  extractPathInfo,
+  extractFilename,
   filterPendingDuplicates,
   findReachableCandidate,
   queueDuplicateDownload,
@@ -512,7 +512,6 @@ async function fallbackToBrowser(
 async function sendToSurge(
   url: string,
   filename: string,
-  directory: string,
   headers: Record<string, string>,
   options?: { skipApproval?: boolean; skipDuplicateWarning?: boolean },
 ): Promise<HandoffResult> {
@@ -530,7 +529,6 @@ async function sendToSurge(
       body: JSON.stringify(buildDownloadRequestBody({
         url,
         filename,
-        directory,
         headers,
         skipApproval: options?.skipApproval,
         skipDuplicateWarning: options?.skipDuplicateWarning,
@@ -761,7 +759,7 @@ async function handleDownloadCreated(downloadItem: {
     await browser.downloads.erase({ id: downloadItem.id } as any);
   } catch { /* already removed - ignore */ }
 
-  const { filename, directory } = extractPathInfo(downloadItem);
+  const filename = extractFilename(downloadItem);
   const duplicateDisplayName = filename || downloadItem.url.split('/').pop()?.split('?')[0] || 'Unknown file';
   const headers = getCapturedHeaders(downloadItem.url) ?? {};
 
@@ -775,7 +773,6 @@ async function handleDownloadCreated(downloadItem: {
       pendingDuplicateCounter,
       url: downloadItem.url,
       filename: duplicateDisplayName,
-      directory,
       cleanupStaleDuplicates,
       persistPendingDuplicates,
       updateBadge,
@@ -786,7 +783,7 @@ async function handleDownloadCreated(downloadItem: {
   }
 
   // Force empty filename hint for backend - rely on backend prober.
-  const result = await sendToSurge(downloadItem.url, '', directory, headers, {
+  const result = await sendToSurge(downloadItem.url, '', headers, {
     skipDuplicateWarning: !warnOnDuplicate,
   });
   logDownload('handoff complete', { id: downloadItem.id, url: downloadItem.url, outcome: result.outcome });
@@ -1075,7 +1072,6 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
   const result = await sendToSurge(
     pending.url,
     '', // Force empty - rely on backend prober
-    pending.directory,
     {},
     { skipApproval: true },
   );

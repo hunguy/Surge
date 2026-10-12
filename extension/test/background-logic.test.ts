@@ -4,7 +4,7 @@ import {
   buildDownloadRequestBody,
   buildEventStreamHeaders,
   coerceStoredBoolean,
-  extractPathInfo,
+  extractFilename,
   filterPendingDuplicates,
   findReachableCandidate,
   openEventStream,
@@ -44,13 +44,11 @@ describe('background logic', () => {
     expect(buildDownloadRequestBody({
       url: 'https://example.com/file.zip',
       filename: 'file.zip',
-      directory: '/downloads',
       headers: { Cookie: 'a=b' },
       skipApproval: true,
     })).toEqual({
       url: 'https://example.com/file.zip',
       filename: 'file.zip',
-      path: '/downloads',
       headers: { Cookie: 'a=b' },
       skip_approval: true,
       skip_duplicate_warning: undefined,
@@ -59,7 +57,6 @@ describe('background logic', () => {
     expect(buildDownloadRequestBody({
       url: 'https://example.com/file.zip',
       filename: 'file.zip',
-      directory: '',
       headers: {},
     })).toEqual({
       url: 'https://example.com/file.zip',
@@ -72,10 +69,23 @@ describe('background logic', () => {
     expect(buildDownloadRequestBody({
       url: 'https://example.com/file.zip',
       filename: '',
-      directory: '',
       headers: {},
       skipDuplicateWarning: true,
     })).toMatchObject({ skip_duplicate_warning: true, skip_approval: undefined });
+  });
+
+  it('never sends a browser-derived destination path', () => {
+    // The browser's download directory must not override the default download
+    // directory configured in Surge's settings.
+    const body = buildDownloadRequestBody({
+      url: 'https://example.com/file.zip',
+      filename: 'file.zip',
+      headers: {},
+      skipApproval: true,
+    });
+
+    expect(body).not.toHaveProperty('path');
+    expect(body).not.toHaveProperty('relative_to_default_dir');
   });
 
   it('prioritizes preferred URLs when building port scan candidates', () => {
@@ -120,7 +130,6 @@ describe('background logic', () => {
       pendingDuplicateCounter: 0,
       url: 'https://example.com/file.zip',
       filename: 'file.zip',
-      directory: '/downloads',
       persistPendingDuplicates,
       updateBadge,
       openPopup,
@@ -134,7 +143,6 @@ describe('background logic', () => {
       {
         url: 'https://example.com/file.zip',
         filename: 'file.zip',
-        directory: '/downloads',
         timestamp: 1234,
       },
     ]]);
@@ -166,29 +174,18 @@ describe('background logic', () => {
 
   it('filters expired pending duplicates during rehydration', () => {
     expect(filterPendingDuplicates([
-      ['dup_1', { url: 'a', filename: 'a', directory: '', timestamp: 50 }],
-      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+      ['dup_1', { url: 'a', filename: 'a', timestamp: 50 }],
+      ['dup_2', { url: 'b', filename: 'b', timestamp: 150 }],
     ], 200, 100)).toEqual([
-      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+      ['dup_2', { url: 'b', filename: 'b', timestamp: 150 }],
     ]);
   });
 
-  it('extracts filename and directory across path styles', () => {
-    expect(extractPathInfo({ filename: 'C:\\Users\\me\\file.zip' })).toEqual({
-      filename: 'file.zip',
-      directory: 'C:/Users/me',
-    });
-    expect(extractPathInfo({ filename: '/home/me/file.zip' })).toEqual({
-      filename: 'file.zip',
-      directory: '/home/me',
-    });
-    expect(extractPathInfo({ filename: 'downloads/file with spaces.zip' })).toEqual({
-      filename: 'file with spaces.zip',
-      directory: 'downloads',
-    });
-    expect(extractPathInfo({ filename: 'plain.txt' })).toEqual({
-      filename: 'plain.txt',
-      directory: '',
-    });
+  it('extracts the filename hint across path styles', () => {
+    expect(extractFilename({ filename: 'C:\\Users\\me\\file.zip' })).toBe('file.zip');
+    expect(extractFilename({ filename: '/home/me/file.zip' })).toBe('file.zip');
+    expect(extractFilename({ filename: 'downloads/file with spaces.zip' })).toBe('file with spaces.zip');
+    expect(extractFilename({ filename: 'plain.txt' })).toBe('plain.txt');
+    expect(extractFilename({})).toBe('');
   });
 });
