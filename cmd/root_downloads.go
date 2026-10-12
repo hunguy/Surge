@@ -573,7 +573,7 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 			baseDir = defaultOutputDir
 		}
 		if baseDir == "" {
-			baseDir = "."
+			baseDir = fallbackDownloadDir()
 		}
 		outPath = filepath.Join(baseDir, reqPath)
 	} else if outPath == "" {
@@ -582,11 +582,31 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		} else if config.Resolve[string](settings.General.DefaultDownloadDir) != "" {
 			outPath = config.Resolve[string](settings.General.DefaultDownloadDir)
 		} else {
-			outPath = "."
+			outPath = fallbackDownloadDir()
 		}
 	}
 
 	return outPath
+}
+
+// fallbackDownloadDir returns an absolute download directory when neither an
+// explicit -o output dir nor a configured default is available. It prefers the
+// primary desktop user's configured directory so the root system service honors
+// the settings the user actually sees, then any known Downloads dir, then the
+// process home. It never returns the working directory: a systemd service runs
+// with cwd "/", which is read-only on image-based distros such as Bazzite, and
+// silently resolving there produces bogus "insufficient disk space" failures.
+func fallbackDownloadDir() string {
+	if dir := strings.TrimSpace(config.ServiceUserDownloadDir()); dir != "" {
+		return dir
+	}
+	if dir := strings.TrimSpace(config.GetDownloadsDir()); dir != "" {
+		return dir
+	}
+	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		return home
+	}
+	return os.TempDir()
 }
 
 func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutputDir string, settings *config.Settings) string {
@@ -603,7 +623,7 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 		return ""
 	}
 
-	baseDir := "."
+	baseDir := fallbackDownloadDir()
 	if relativeToDefaultDir {
 		if settings != nil && strings.TrimSpace(config.Resolve[string](settings.General.DefaultDownloadDir)) != "" {
 			baseDir = config.Resolve[string](settings.General.DefaultDownloadDir)

@@ -353,6 +353,77 @@ func TestLocalDownloadService_HistoryAndList(t *testing.T) {
 	}
 }
 
+func TestLocalDownloadService_DeleteQueuedDownload_Persists(t *testing.T) {
+	svc, ts, tmpDir, removed := setupTestService(t)
+	defer ts.Close()
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	// Occupy the single scheduler slot so the next download stays queued.
+	blockCh := make(chan struct{})
+	blocking := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if r.Header.Get("Range") != "bytes=0-0" {
+			select {
+			case <-blockCh:
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer blocking.Close()
+	defer close(blockCh)
+
+	if _, err := svc.Add(blocking.URL, tmpDir, "active.bin", nil, nil, false, 1, 0); err != nil {
+		t.Fatalf("add active: %v", err)
+	}
+
+	queuedID, err := svc.Add(ts.URL, tmpDir, "queued.bin", nil, nil, false, 1, 0)
+	if err != nil {
+		t.Fatalf("add queued: %v", err)
+	}
+
+	// Confirm it really sits in the scheduler queue (not just the DB).
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		status, statusErr := svc.GetStatus(queuedID)
+		if statusErr == nil && status != nil && status.Status == "queued" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("download never reached queued state (last status: %+v, err: %v)", status, statusErr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if err := svc.Delete(queuedID); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	select {
+	case removedID := <-removed:
+		if removedID != queuedID {
+			t.Fatalf("removed download ID = %q, want %q", removedID, queuedID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for removal event for queued download")
+	}
+
+	// Reconnecting lists downloads from the service, so the deleted item must be
+	// absent from List() or it will reappear in the UI.
+	statuses, err := svc.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	for _, status := range statuses {
+		if status.ID == queuedID {
+			t.Fatalf("deleted queued download is still listed: %+v", status)
+		}
+	}
+}
+
 func TestLocalDownloadService_Delete(t *testing.T) {
 	svc, ts, tmpDir, removed := setupTestService(t)
 	defer ts.Close()

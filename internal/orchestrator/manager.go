@@ -44,6 +44,13 @@ type LifecycleManager struct {
 	shutdownOnce sync.Once
 	inflightMu   sync.Mutex
 	inflight     map[string]*inflightEnqueue
+
+	// removedIDs tombstones downloads that were cancelled/removed so a late
+	// lifecycle event (a retry EventQueued, a racing EventStarted, ...) cannot
+	// recreate the record and make a deleted item reappear on the next list or
+	// reconnect. Marked synchronously in Cancel, before EventRemoved is emitted.
+	removedIDsMu sync.Mutex
+	removedIDs   map[string]time.Time
 	// Test hooks make concurrent enqueue tests deterministic without affecting
 	// production behavior.
 	inflightJoinHook  func()
@@ -128,6 +135,7 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings
 		isNameActive:        activeCheck,
 		probeSem:            sem,
 		inflight:            make(map[string]*inflightEnqueue),
+		removedIDs:          make(map[string]time.Time),
 	}
 }
 
@@ -355,7 +363,17 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 				buffer := settings.ToRuntimeConfig().GetPrecheckSafetyBuffer()
 				if !utils.HasSufficientDiskSpace(probeResult.FileSize, free, buffer) {
 					utils.Debug("Lifecycle: insufficient disk for %s (size=%d free=%d buffer=%d)", finalPath, probeResult.FileSize, free, buffer)
-					return "", "", types.ErrInsufficientDiskSpace
+					// Include the resolved path and sizes so a wrong destination (for
+					// example "/" when no default download dir is configured) is
+					// obvious instead of a bare "insufficient disk space".
+					return "", "", fmt.Errorf(
+						"%w in %s: need %s, only %s free (reserving %s safety buffer)",
+						types.ErrInsufficientDiskSpace,
+						finalPath,
+						utils.FormatBytes(probeResult.FileSize),
+						utils.FormatBytes(free),
+						utils.FormatBytes(buffer),
+					)
 				}
 			}
 		}
@@ -376,6 +394,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			_ = os.Remove(surgePath)
 			return "", "", err
 		}
+
+		// A fresh enqueue reusing a previously removed ID legitimately revives it.
+		mgr.clearRemoved(cfg.ID)
 
 		queuedEvent := types.DownloadEvent{
 			Type:         types.EventQueued,

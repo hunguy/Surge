@@ -95,6 +95,16 @@ func finalizeCompletedFile(finalPath string) error {
 func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 	for msg := range ch {
 		m := msg
+
+		// A removed download may still have lifecycle events in flight (a retry
+		// EventQueued, a start that raced the cancel, ...). Ignore them so the
+		// deleted record is not recreated and does not reappear on the next
+		// list/reconnect. EventRemoved itself must still run to clean up state.
+		if m.Type != types.EventRemoved && mgr.isRemoved(m.DownloadID) {
+			utils.Debug("Lifecycle: ignoring %v for removed download %s", m.Type, m.DownloadID)
+			continue
+		}
+
 		switch m.Type {
 		case types.EventStarted:
 			// Persist the started record immediately so crash recovery and later lifecycle

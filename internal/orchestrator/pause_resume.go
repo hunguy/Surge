@@ -312,6 +312,11 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 		return nil
 	}
 
+	// Tombstone the ID before publishing so any lifecycle event already in
+	// flight (or published later by the scheduler) is ignored instead of
+	// recreating the record.
+	mgr.markRemoved(id)
+
 	// Emit removal event - event worker handles DB deletion and file cleanup.
 	if mgr.eventBus != nil {
 		_ = mgr.eventBus.Publish(types.DownloadEvent{
