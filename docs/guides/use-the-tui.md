@@ -20,6 +20,12 @@ On the dashboard:
 Treat exported cURL commands as sensitive. They can contain session cookies or
 other credentials; do not paste them into issues or public chats.
 
+## Copy a download URL
+
+Select a download and press `y` to copy its source URL to the clipboard. This
+works on every tab, so you can copy a link from the queue, an active transfer,
+or a finished download.
+
 ## Find shortcuts
 
 Press `h` to show or hide the keyboard-shortcuts overlay. Keybindings can be

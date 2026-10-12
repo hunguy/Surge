@@ -58,6 +58,7 @@ type DashboardKeyMap struct {
 	ReportBug        key.Binding
 	OpenFile         key.Binding
 	OpenFolder       key.Binding
+	CopyURL          key.Binding
 	Quit             key.Binding
 	ForceQuit        key.Binding
 	CategoryFilter   key.Binding
@@ -507,6 +508,10 @@ func DefaultKeyMap() *KeyMap {
 				key.WithKeys("O"),
 				key.WithHelp("shift+o", "open folder"),
 			),
+			CopyURL: key.NewBinding(
+				key.WithKeys("y"),
+				key.WithHelp("y", "copy url"),
+			),
 			Quit: key.NewBinding(
 				key.WithKeys("ctrl+c", "ctrl+q"),
 				key.WithHelp("ctrl+q", "quit"),
@@ -806,7 +811,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
-		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Refresh, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
+		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Refresh, k.CopyURL, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
 		{k.Log, k.OpenFile, k.OpenFolder, k.ToggleHelp, k.ReportBug, k.Quit},
 	}
 }

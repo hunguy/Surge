@@ -40,6 +40,37 @@ func TestDefaultKeyMap(t *testing.T) {
 	}
 }
 
+func TestDefaultCopyURLBinding(t *testing.T) {
+	km := DefaultKeyMap()
+	keys := km.Dashboard.CopyURL.Keys()
+	if len(keys) != 1 || keys[0] != "y" {
+		t.Fatalf("Default Dashboard.CopyURL keys = %v, want [y]", keys)
+	}
+	if got := km.Dashboard.CopyURL.Help().Desc; got != "copy url" {
+		t.Fatalf("Default Dashboard.CopyURL help desc = %q, want %q", got, "copy url")
+	}
+
+	// CopyURL must be discoverable in the expanded help.
+	found := false
+	for _, row := range km.Dashboard.FullHelp() {
+		for _, b := range row {
+			if b.Help().Desc == "copy url" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("Dashboard.CopyURL missing from FullHelp")
+	}
+
+	// The binding should survive a round-trip through the persisted config.
+	loaded := DefaultKeyMap()
+	loaded.ApplyConfig(km.ToConfig())
+	if got := loaded.Dashboard.CopyURL.Keys(); len(got) != 1 || got[0] != "y" {
+		t.Fatalf("CopyURL keys after config round-trip = %v, want [y]", got)
+	}
+}
+
 func TestShiftedDashboardBindingsUseReadableHelpLabels(t *testing.T) {
 	km := DefaultKeyMap()
 	for name, binding := range map[string]key.Binding{

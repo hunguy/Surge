@@ -17,6 +17,10 @@ While in the TUI Dashboard, you can rapidly add downloads using your clipboard:
 - Press `a` to manually type or paste a URL.
 - Press `Shift+A` to directly attempt to parse a copied browser **cURL** command (from "Copy as cURL"). Surge will extract the URL and all headers (like cookies and user-agents).
 
+### Copying a Download URL
+
+Select any download and press `y` to copy its source URL to the system clipboard. This works on every tab (Queued, Active, and Done), so you can grab a link back for the queue, an in-progress transfer, or a finished download.
+
 ## CLI Commands
 
 ## Command Table

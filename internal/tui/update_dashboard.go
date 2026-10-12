@@ -11,6 +11,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+// writeDownloadURLClipboard copies a download URL to the system clipboard.
+// It is a package variable so tests can stub the platform clipboard.
+var writeDownloadURLClipboard = clipboard.Write
+
 func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle search input FIRST when active (intercepts ALL keys)
 	if m.searchActive {
@@ -232,6 +236,22 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				_ = utils.OpenContainingFolder(filePath)
 			}
+		}
+		return m, nil
+	}
+
+	// Copy selected download URL to clipboard (works on any tab)
+	if key.Matches(msg, m.keys.Dashboard.CopyURL) {
+		if d := m.GetSelectedDownload(); d != nil {
+			if d.URL == "" {
+				m.addLogEntry(LogStyleError.Render("\u2716 No URL to copy"))
+				return m, nil
+			}
+			if err := writeDownloadURLClipboard(d.URL); err != nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Copy failed: " + err.Error()))
+				return m, nil
+			}
+			m.addLogEntry(LogStyleStarted.Render("\u2714 URL copied to clipboard"))
 		}
 		return m, nil
 	}
