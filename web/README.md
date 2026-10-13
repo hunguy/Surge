@@ -1,37 +1,69 @@
-# Surge web mock
+# Surge web
 
-A playable mock of the Surge download manager UI, built with Vite, React, and
+A browser client for the Surge download manager, built with Vite, React, and
 [Arc](https://uiarc.dev) components. It recreates the layout from
-`../stitch_mobile_download_manager_ui/` with Arc's design language instead of the
-original emerald glow chrome.
-
-Everything is local. There is no Surge HTTP or WebSocket call, no auth, and no
-browser extension wiring. Downloads, throughput, and the server connection are
-mock state in React that resets on reload (the connection prefs persist to
-`localStorage`).
+`../stitch_mobile_download_manager_ui/` with Arc's design language, and drives it
+from a running `surge server`.
 
 ## Run it
 
+Start the daemon, then the app:
+
 ```bash
+# in the repo root
+go build -o surge .
+./surge server            # binds 127.0.0.1:1700 by default
+./surge token             # prints the auth token, or pass --token
+```
+
+```bash
+# in web/
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # type check plus production build
+npm run test     # node:test, no test dependencies
 npm run lint     # oxlint
 ```
+
+Open the app, then **Options → Server settings** and enter the server URL
+(`http://127.0.0.1:1700`) and the token. Both are saved in this browser and
+validated on save; the header badge reads Connected once the daemon answers.
 
 ## What is interactive
 
 - **Queue / Active / Done** filters the list, with live counts on each tab.
-- **Swipe a row** left, or use its More actions menu, to pause, resume, or remove.
-- **Add URL** opens a bottom sheet on phones and a dialog from 768px up. An empty
-  link shows an inline warning.
-- **Options, then Server settings** edits the mock server URL and token. Save with
-  both fields filled and the header badge reads Connected; Disconnect flips it to
-  Not connected. The pair is stored on this device.
+- **Swipe a row** left to reveal Pause, Resume, and Remove. (The row's More
+  actions menu is a known Arc bug: `menuItems` is never populated in
+  `components/arc/swipe-actions/swipe-actions.tsx`, so the menu never renders.)
+- **Add URL** opens a bottom sheet on phones and a dialog from 768px up, and
+  posts to `/download` with the optional destination path.
+- **The status pill** opens the activity log: server `system` lines plus local
+  connection and action results. Clear is local only.
 - **Theme switch** in the settings dialog moves between Arc's light and dark
-  themes.
-- A one second tick advances active progress and shifts the throughput series while
-  the tab is visible.
+  themes and is stored on the device.
+
+## How it talks to the server
+
+| UI need | Endpoint |
+|---------|----------|
+| Connect | `GET /health`, then an authenticated `GET /list` |
+| Download list | `GET /list`, polled every 2s |
+| Live updates and activity | `GET /events` (SSE) |
+| Add URL | `POST /download` `{ url, path }` |
+| Pause / Resume | `POST /pause?id=`, `POST /resume?id=` |
+| Remove | `POST /delete?id=` (queue removal; not `/purge`) |
+
+`EventSource` cannot send an `Authorization` header, so `src/api/sse.ts` reads
+the stream off a `fetch` `ReadableStream` instead, with backoff and a give-up on
+401.
+
+Two behaviours worth knowing:
+
+- A `progress` event carries only `connections` and `elapsed` — no bytes, speed,
+  or percentage. Those come from the `/list` poll, which is why it runs every
+  2s rather than the extension's 60s; at 60s the progress bar would look frozen.
+- Every field on a `DownloadEvent` is `omitempty`, so an absent number means
+  "not carried by this event" and is left alone, never read as zero.
 
 ## Layout
 
@@ -40,10 +72,16 @@ src/
   main.tsx              entry, loads Arc foundation.css and both fonts
   pages/                the one page container
   regions/              composition modules: header, hero, chart, filter, list, dock, overlays
-  state/                MockAppProvider context and reducer
-  mock/                 types, seed downloads, throughput series, connection storage
+  state/                AppProvider context, plus the pure reducer it drives
+  api/                  HTTP client, SSE reader, server types, download mappers
+  types.ts              the shapes the UI renders
+  throughput.ts         the chart's sample series
   components/arc/       installed by the shadcn CLI, not hand edited
 ```
 
 Regions hold layout only. Every button, badge, bar, chart, menu, and overlay is an
 Arc component; see `src/regions/` for which ids are used and where.
+
+The reducer in `state/app-reducer.ts` is pure and takes no React dependency, so
+the mapping from server payloads to rows is unit-tested directly rather than
+through the DOM. Run `npm run test`.
