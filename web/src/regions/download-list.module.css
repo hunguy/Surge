@@ -1,0 +1,7 @@
+.region {
+  display: grid;
+}
+
+.action {
+  min-width: 8rem;
+}

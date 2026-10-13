@@ -1,0 +1,65 @@
+.row {
+  display: grid;
+  width: 100%;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.filename {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Save path on the left, host right aligned on the same line. */
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.path {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* Elapsed on the left, time remaining on the right, neither labelled. */
+.times {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The only Arc-internal override: the running speed reads as a green status while it sits in the progress label.
+   Scoped to the progress bar so the status badge beside the filename keeps its tone. */
+.row :global([role="progressbar"] [class*="_label_"]) {
+  color: var(--success);
+}

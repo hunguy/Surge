@@ -1,0 +1,21 @@
+.filter {
+  display: flex;
+}
+
+/* The control fills the column so its options spread evenly and their labels centre.
+   Arc hashes its CSS module class names, so these match the generated `_track_<hash>`
+   and `_button_<hash>` names scoped inside the control. */
+.filter {
+  & > * {
+    width: 100%;
+  }
+
+  & :global([class*="_track_"]) {
+    flex: 1;
+  }
+
+  & :global([class*="_button_"]) {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
