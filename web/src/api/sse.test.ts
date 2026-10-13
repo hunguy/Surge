@@ -134,6 +134,6 @@ test("streamEvents gives up on a 401 instead of retrying a token the daemon reje
   const requests = sse.seen.length;
   await sse.close();
 
-  assert.deepEqual(statuses, ["connecting", "closed"]);
+  assert.deepEqual(statuses, ["connecting", "unauthorized"]);
   assert.equal(requests, 1);
 });

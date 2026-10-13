@@ -5,8 +5,8 @@ import type { SwipeAction } from "@/components/arc/swipe-actions/swipe-actions";
 import EmptyState from "@/components/arc/empty-state/empty-state";
 import Button from "@/components/arc/button/button";
 import DownloadRow from "@/regions/download-row";
-import { useMockApp } from "@/state/mock-app-state";
-import type { FilterValue, MockDownload } from "@/mock/types";
+import { useApp } from "@/state/app-state";
+import type { FilterValue, Download } from "@/types";
 
 const EMPTY: Record<FilterValue, { title: string; description: string }> = {
   queue: { title: "Nothing queued", description: "Downloads wait here until an active slot frees up." },
@@ -15,7 +15,7 @@ const EMPTY: Record<FilterValue, { title: string; description: string }> = {
 };
 
 const actionsFor = (
-  download: MockDownload,
+  download: Download,
   pause: (id: string) => void,
   resume: (id: string) => void,
   remove: (id: string) => void,
@@ -47,7 +47,7 @@ const actionsFor = (
 };
 
 export default function DownloadList() {
-  const { visibleDownloads, filter, pause, resume, remove, setAddUrlOpen } = useMockApp();
+  const { visibleDownloads, filter, pause, resume, remove, setAddUrlOpen } = useApp();
 
   if (visibleDownloads.length === 0) {
     return (

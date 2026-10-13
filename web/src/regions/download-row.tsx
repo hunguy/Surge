@@ -1,7 +1,7 @@
 import styles from "./download-row.module.css";
 import Badge, { type BadgeTone } from "@/components/arc/badge/badge";
 import Progress from "@/components/arc/progress/progress";
-import type { DownloadStatus, MockDownload } from "@/mock/types";
+import type { DownloadStatus, Download } from "@/types";
 
 const TONES: Record<DownloadStatus, BadgeTone> = {
   queued: "warning",
@@ -30,7 +30,7 @@ const clock = (total: number): string => {
 const megabytes = (bps: number) => `${(bps / 1_000_000).toFixed(1)} MB/s`;
 
 /** Row body. Layout only: every piece of chrome is an Arc primitive. */
-export default function DownloadRow({ download }: { download: MockDownload }) {
+export default function DownloadRow({ download }: { download: Download }) {
   const running = download.status === "active";
   const showProgress = running || download.status === "paused";
   // Queued rows have neither an elapsed time nor an estimate, so they skip the times line entirely.

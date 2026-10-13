@@ -1,10 +1,10 @@
 import styles from "./bottom-dock.module.css";
 import { Plus } from "lucide-react";
 import Button from "@/components/arc/button/button";
-import { useMockApp } from "@/state/mock-app-state";
+import { useApp } from "@/state/app-state";
 
 export default function BottomDock() {
-  const { setAddUrlOpen } = useMockApp();
+  const { setAddUrlOpen } = useApp();
 
   return (
     <div className={styles.dock}>

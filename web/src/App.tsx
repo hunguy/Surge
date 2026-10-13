@@ -1,13 +1,10 @@
-import { MockAppProvider } from "@/state/mock-app-state";
-import { ActivityLogProvider } from "@/state/activity-log";
+import { AppProvider } from "@/state/app-state";
 import DownloadManagerPage from "@/pages/download-manager-page";
 
 export default function App() {
   return (
-    <ActivityLogProvider>
-      <MockAppProvider>
-        <DownloadManagerPage />
-      </MockAppProvider>
-    </ActivityLogProvider>
+    <AppProvider>
+      <DownloadManagerPage />
+    </AppProvider>
   );
 }

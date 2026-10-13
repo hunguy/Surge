@@ -6,19 +6,19 @@ import { Input } from "@/components/arc/input/input";
 import { PasswordField } from "@/components/arc/password-field/password-field";
 import Button from "@/components/arc/button/button";
 import Alert from "@/components/arc/alert/alert";
-import { useMockApp } from "@/state/mock-app-state";
+import { useApp } from "@/state/app-state";
 import { useTheme } from "@/regions/use-theme";
 
 /** The dialog body unmounts when closed, so it opens on the current saved values. */
 export default function ConnectionSettingsDialog() {
-  const { connection, connectionOpen, setConnectionOpen, saveConnection, disconnect } = useMockApp();
+  const { connection, connectionOpen, setConnectionOpen, saveConnection, disconnect } = useApp();
   const { theme, setTheme } = useTheme();
 
   return (
     <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
       <DialogContent
         title="Server settings"
-        description="Saved on this device for the mock. Nothing is sent anywhere."
+        description="Saved in this browser, and sent only to the server above."
       >
         {connectionOpen && (
           <SettingsForm
@@ -81,7 +81,7 @@ function SettingsForm({
       <Input
         label="Server URL"
         value={serverUrl}
-        placeholder="http://127.0.0.1:8181"
+        placeholder="http://127.0.0.1:1700"
         autoComplete="off"
         spellCheck={false}
         onChange={event => setServerUrl(event.target.value)}

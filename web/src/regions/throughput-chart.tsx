@@ -1,7 +1,7 @@
 import styles from "./throughput-chart.module.css";
 import LineChart from "@/components/arc/line-chart/line-chart";
-import { useMockApp } from "@/state/mock-app-state";
-import { averageOf, minOf, peakOf } from "@/mock/throughput";
+import { useApp } from "@/state/app-state";
+import { averageOf, minOf, peakOf } from "@/throughput";
 import { useMediaQuery } from "@/regions/use-media-query";
 
 const SERIES = [
@@ -12,7 +12,7 @@ const SERIES = [
 const round = (value: number) => Math.round(value).toLocaleString("en-US");
 
 export default function ThroughputChart() {
-  const { throughput } = useMockApp();
+  const { throughput } = useApp();
   const wide = useMediaQuery("(min-width: 768px)");
 
   const stats = [

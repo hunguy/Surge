@@ -5,12 +5,12 @@ import BottomSheet from "@/components/arc/bottom-sheet/bottom-sheet";
 import { Input } from "@/components/arc/input/input";
 import Button from "@/components/arc/button/button";
 import Alert from "@/components/arc/alert/alert";
-import { useMockApp } from "@/state/mock-app-state";
+import { useApp } from "@/state/app-state";
 import { useIsPhone } from "@/regions/use-media-query";
 
 /** Shared form body. It unmounts with the overlay, so each opening starts empty. */
 function AddUrlForm({ onClose }: { onClose: () => void }) {
-  const { addUrl } = useMockApp();
+  const { addUrl } = useApp();
   const [url, setUrl] = useState("");
   const [savePath, setSavePath] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ function AddUrlForm({ onClose }: { onClose: () => void }) {
 }
 
 export default function AddUrlOverlay() {
-  const { addUrlOpen, setAddUrlOpen } = useMockApp();
+  const { addUrlOpen, setAddUrlOpen } = useApp();
   const isPhone = useIsPhone();
   const close = () => setAddUrlOpen(false);
   const form = <AddUrlForm onClose={close} />;

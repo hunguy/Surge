@@ -1,13 +1,13 @@
 import styles from "./speed-hero.module.css";
 import { useEffect, useRef, useState } from "react";
 import { MetricCard } from "@/components/arc/metric-card/metric-card";
-import { useMockApp } from "@/state/mock-app-state";
+import { useApp } from "@/state/app-state";
 
 const toMegabytes = (bps: number, decimals: number) => Number((bps / 1_000_000).toFixed(decimals));
 
 /** Metric cards announce nothing on their own, so a live region carries the readings while they move. */
 export default function SpeedHero() {
-  const { downloadBps, downloadedMB } = useMockApp();
+  const { downloadBps, downloadedMB } = useApp();
   const value = toMegabytes(downloadBps, 1);
   const total = Number(downloadedMB.toFixed(1));
   const [delta, setDelta] = useState(0);

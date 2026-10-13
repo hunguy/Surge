@@ -1,7 +1,7 @@
 import styles from "./download-filter.module.css";
 import SegmentedControl from "@/components/arc/segmented-control/segmented-control";
-import { useMockApp } from "@/state/mock-app-state";
-import type { FilterValue } from "@/mock/types";
+import { useApp } from "@/state/app-state";
+import type { FilterValue } from "@/types";
 
 const TABS: { value: FilterValue; label: string }[] = [
   { value: "queue", label: "Queue" },
@@ -10,7 +10,7 @@ const TABS: { value: FilterValue; label: string }[] = [
 ];
 
 export default function DownloadFilter() {
-  const { filter, counts, setFilter } = useMockApp();
+  const { filter, counts, setFilter } = useApp();
 
   return (
     <div className={styles.filter}>

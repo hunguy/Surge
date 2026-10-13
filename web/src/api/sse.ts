@@ -63,7 +63,7 @@ export const drainFrames = (buffer: string): { frames: SseFrame[]; rest: string 
 
 export type SseHandlers = {
   onEvent: (frame: SseFrame) => void;
-  onStatus: (status: "connecting" | "open" | "closed") => void;
+  onStatus: (status: "connecting" | "open" | "closed" | "unauthorized") => void;
 };
 
 /**
@@ -97,7 +97,7 @@ export const streamEvents = (
       });
       // 401 will not fix itself by retrying, so stop and let the caller re-auth.
       if (response.status === 401) {
-        handlers.onStatus("closed");
+        handlers.onStatus("unauthorized");
         return;
       }
       if (!response.ok || !response.body) {

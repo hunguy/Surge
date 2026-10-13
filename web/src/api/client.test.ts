@@ -108,7 +108,7 @@ test("a rejected token surfaces as an ApiError carrying 401", async t => {
   );
 });
 
-test("an unreachable daemon surfaces as an ApiError with status 0", async t => {
+test("an unreachable daemon surfaces as an ApiError with status 0", async () => {
   // Nothing is listening on this port, so the connection is refused.
   await assert.rejects(
     () => listDownloads("http://127.0.0.1:1", "tok"),
@@ -136,7 +136,7 @@ test("validateConnection passes when health and the authenticated list both answ
   assert.deepEqual(await validateConnection(stub.url, "tok"), { ok: true });
 });
 
-test("validateConnection blames the address when nothing answers", async t => {
+test("validateConnection blames the address when nothing answers", async () => {
   assert.deepEqual(await validateConnection("http://127.0.0.1:1", "tok"), {
     ok: false,
     error: "Could not reach the server",

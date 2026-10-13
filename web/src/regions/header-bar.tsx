@@ -2,12 +2,10 @@ import styles from "./header-bar.module.css";
 import { Settings } from "lucide-react";
 import Badge from "@/components/arc/badge/badge";
 import Button from "@/components/arc/button/button";
-import { useMockApp } from "@/state/mock-app-state";
-import { useActivityLog } from "@/state/activity-log";
+import { useApp } from "@/state/app-state";
 
 export default function HeaderBar() {
-  const { connection, setConnectionOpen } = useMockApp();
-  const { setLogOpen } = useActivityLog();
+  const { connection, setConnectionOpen, setLogOpen } = useApp();
 
   const dot = <span className={styles.dot} aria-hidden="true" />;
 
