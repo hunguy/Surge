@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import {
   addDownload,
   ApiError,
@@ -73,6 +73,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.downloads]);
   const nameOf = (id: string) => downloadsRef.current.find(row => row.id === id)?.filename ?? id;
 
+  // Bumped by every explicit Save. The connect effect keys off this as well as the
+  // credential pair, so re-saving the values you already have reconnects after a
+  // Disconnect — without it that effect still holds the previous pair and no-ops.
+  const [saveSeq, setSaveSeq] = useState(0);
+
   // Stored prefs are read after mount, so the first render is identical on every pass.
   useEffect(() => {
     dispatch({ type: "adoptConnection", connection: readStoredConnection() });
@@ -86,7 +91,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const { connected, serverUrl, token } = state.connection;
 
-  // Validate once per credential pair, then hold the stream open until it changes.
+  // Validate on each credential pair (and each explicit Save), then hold the
+  // stream open until either changes.
   useEffect(() => {
     if (!serverUrl || !token) return;
     const abort = new AbortController();
@@ -129,7 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       abort.abort();
       stop?.();
     };
-  }, [serverUrl, token]);
+  }, [serverUrl, token, saveSeq]);
 
   // Periodic resync, so a dropped or missed event cannot leave the list stale.
   useEffect(() => {
@@ -169,9 +175,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearLog = useCallback(() => dispatch({ type: "clearLog" }), []);
 
   const saveConnection = useCallback((nextUrl: string, nextToken: string) => {
-    // The effect above validates; this only stages the credentials and says so.
+    // The effect above validates; this only stages the credentials and asks it to run.
     dispatch({ type: "adoptConnection", connection: { serverUrl: nextUrl, token: nextToken, connected: false } });
     dispatch({ type: "log", level: "info", message: `Saved server ${nextUrl}` });
+    setSaveSeq(seq => seq + 1);
   }, []);
 
   const pause = useCallback(
