@@ -39,7 +39,7 @@ function AddUrlForm({ onClose }: { onClose: () => void }) {
       <Input
         label="Save to"
         value={savePath}
-        placeholder="/mnt/Saved/folder"
+        placeholder="/path/to/location"
         autoComplete="off"
         spellCheck={false}
         onChange={event => setSavePath(event.target.value)}
