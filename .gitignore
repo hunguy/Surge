@@ -22,6 +22,12 @@ dist/
 build/
 .goreleaser-extra/
 
+# local editor + agent tooling
+.DS_Store
+.claude/
+.cursor/
+.serena/
+
 # secrets
 .github_token
 .env
