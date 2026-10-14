@@ -123,6 +123,32 @@ jobs:
           build-args: |
             SURGE_VERSION=${{ steps.surge-version.outputs.version }}
 
+      - name: Extract web metadata (tags, labels)
+        id: web-meta
+        uses: docker/metadata-action@v5
+        with:
+          # The web client is a separate image from the daemon, so it needs its
+          # own repository rather than a tag on the daemon's.
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
+          tags: |
+            type=raw,value=${{ steps.surge-version.outputs.version }}
+            type=raw,value=latest,enable=${{ steps.latest-tag.outputs.enable }}
+
+      # Needs no release artifacts and pins nothing from the repo history: compose
+      # builds it from the working tree, so this image tracks the shipped source
+      # rather than a released daemon version.
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
+        with:
+          context: web
+          file: web/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.web-meta.outputs.tags }}
+          labels: ${{ steps.web-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Summary
         run: |
           echo "## Docker Image Built Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
@@ -132,6 +158,7 @@ jobs:
           echo "**Images pushed:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.web-meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
@@ -139,4 +166,5 @@ jobs:
           echo "### Pull the image:" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.surge-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ steps.surge-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

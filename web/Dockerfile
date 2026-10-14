@@ -1,4 +1,6 @@
-FROM node:22-alpine AS build
+# The bundle is identical for every architecture, so build it once on the native
+# platform rather than running Node under QEMU on each leg of a multi-arch build.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 
 WORKDIR /app
 
