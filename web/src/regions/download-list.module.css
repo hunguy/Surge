@@ -4,10 +4,6 @@
 
 .toolbar {
   display: flex;
-  justify-content: flex-end;
-  padding-bottom: var(--space-2);
-}
-
-.action {
-  min-width: 8rem;
+  justify-content: center;
+  padding-top: var(--space-4);
 }

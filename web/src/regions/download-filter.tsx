@@ -1,7 +1,12 @@
 import styles from "./download-filter.module.css";
 import SegmentedControl from "@/components/arc/segmented-control/segmented-control";
+import Badge from "@/components/arc/badge/badge";
+import type { BadgeTone } from "@/components/arc/badge/badge";
 import { useApp } from "@/state/app-state";
 import type { FilterValue } from "@/types";
+
+/** One hue per tab: queued waits, active runs, done finished. */
+const TONES: Record<FilterValue, BadgeTone> = { queue: "warning", active: "info", done: "success" };
 
 const TABS: { value: FilterValue; label: string }[] = [
   { value: "queue", label: "Queue" },
@@ -18,7 +23,15 @@ export default function DownloadFilter() {
         label="Download status"
         value={filter}
         onValueChange={value => setFilter(value as FilterValue)}
-        options={TABS.map(tab => ({ value: tab.value, label: `${tab.label} (${counts[tab.value]})` }))}
+        options={TABS.map(tab => ({
+          value: tab.value,
+          label: tab.label,
+          accessory: (
+            <Badge tone={TONES[tab.value]} size="sm">
+              {counts[tab.value]}
+            </Badge>
+          ),
+        }))}
       />
     </div>
   );

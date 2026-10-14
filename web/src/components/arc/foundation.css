@@ -43,6 +43,7 @@
   --focus-ring: transparent;
   --success: oklch(49% .19 150);
   --warning: oklch(58% .18 75);
+  --info: oklch(54% .17 245);
   --danger: oklch(54% .21 25);
   --shadow-resting: 0 1px 2px oklch(0% 0 0 / .035);
   --shadow-raised: 0 6px 18px oklch(0% 0 0 / .065), 0 1px 3px oklch(0% 0 0 / .035);
@@ -107,6 +108,7 @@
   --control-thumb-shadow: 0 0 0 .5px oklch(0% 0 0 / .3), 0 1px 2px oklch(0% 0 0 / .35), 0 2px 6px oklch(0% 0 0 / .2);
   --success: oklch(78% .18 150);
   --warning: oklch(83% .17 80);
+  --info: oklch(74% .15 240);
   --danger: oklch(76% .2 25);
   --shadow-resting: 0 1px 2px oklch(0% 0 0 / .18);
   --shadow-raised: 0 8px 22px oklch(0% 0 0 / .22);

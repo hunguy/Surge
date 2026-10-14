@@ -24,12 +24,13 @@
 /* The name takes what is left and never pushes the status off the row; the pill keeps its intrinsic width.
    At 80% the name has a column of its own, so its box can end before the text does. */
 .filename {
+  position: relative;
   min-width: 0;
   flex: 0 1 80%;
   margin: 0;
+  overflow: hidden;
 }
 
-/* Overflowing text runs right to left, so the end of a long name is what stays readable beside the status pill. */
 .filenameText {
   display: block;
   overflow: hidden;
@@ -38,7 +39,60 @@
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
+}
+
+/* Off-flow copy used only to measure the full name. Height is zero so it cannot change the row. */
+.filenameText.probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  height: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Two copies travel by one name plus the gap, so the loop lands on the same pixels it started from. */
+.marquee {
+  display: inline-flex;
+  width: max-content;
+  gap: var(--space-8);
+  animation: filename-marquee var(--marquee-duration) linear infinite;
+}
+
+.marquee .filenameText {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+@keyframes filename-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc((var(--marquee-distance) + var(--space-8)) * -1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    display: block;
+    width: auto;
+    animation: none;
+  }
+
+  .marquee .filenameText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+  }
+
+  .marquee .filenameText + .filenameText {
+    display: none;
+  }
 }
 
 /* The host names the source and takes the left edge; the save path takes the right and aligns to the inner edge. */

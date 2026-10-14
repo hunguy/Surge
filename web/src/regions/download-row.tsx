@@ -1,7 +1,75 @@
 import styles from "./download-row.module.css";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Badge, { type BadgeTone } from "@/components/arc/badge/badge";
 import Progress from "@/components/arc/progress/progress";
 import type { DownloadStatus, Download } from "@/types";
+
+/** Travel speed while a long name is moving. A marquee has to be linear, so this is not a motion-token duration. */
+const MARQUEE_SPEED = 32;
+
+function Filename({ name }: { name: string }) {
+  const boxRef = useRef<HTMLHeadingElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
+  const [marquee, setMarquee] = useState<{ distance: number; duration: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const probe = probeRef.current;
+    if (!box || !probe) return;
+
+    let cancelled = false;
+    const update = () => {
+      if (cancelled) return;
+      const textWidth = probe.offsetWidth;
+      const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // Matches the track gap, which is --space-8 (2rem).
+      const gap = root * 2;
+      const overflows = textWidth > box.clientWidth + 1;
+      const next = overflows ? { distance: textWidth, duration: (textWidth + gap) / MARQUEE_SPEED } : null;
+      setMarquee(current => {
+        if (next === null) return current === null ? current : null;
+        if (current && current.distance === next.distance && Math.abs(current.duration - next.duration) < 0.05) return current;
+        return next;
+      });
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(box);
+    observer.observe(probe);
+    document.fonts?.ready.then(update).catch(() => {});
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [name]);
+
+  return (
+    <h3 ref={boxRef} className={styles.filename} title={name}>
+      <span ref={probeRef} className={`${styles.filenameText} ${styles.probe}`} aria-hidden="true">
+        {name}
+      </span>
+      {marquee ? (
+        <span
+          className={styles.marquee}
+          style={
+            {
+              "--marquee-distance": `${marquee.distance}px`,
+              "--marquee-duration": `${marquee.duration}s`,
+            } as CSSProperties
+          }
+        >
+          <span className={styles.filenameText}>{name}</span>
+          <span className={styles.filenameText} aria-hidden="true">
+            {name}
+          </span>
+        </span>
+      ) : (
+        <span className={styles.filenameText}>{name}</span>
+      )}
+    </h3>
+  );
+}
 
 const TONES: Record<DownloadStatus, BadgeTone> = {
   queued: "warning",
@@ -41,9 +109,7 @@ export default function DownloadRow({ download }: { download: Download }) {
   return (
     <article className={styles.row}>
       <div className={styles.head}>
-        <h3 className={styles.filename} title={download.filename}>
-          <span className={styles.filenameText}>{download.filename}</span>
-        </h3>
+        <Filename name={download.filename} />
         <Badge tone={TONES[download.status]}>{LABELS[download.status]}</Badge>
       </div>
 
