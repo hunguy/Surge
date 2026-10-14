@@ -86,6 +86,20 @@ test("addDownload posts the url with an optional path", async t => {
   assert.deepEqual(JSON.parse(stub.requests[1]!.body), { url: "https://ex.com/a.zip" });
 });
 
+test("a duplicate add is reported in words, not as the daemon's raw JSON", async t => {
+  const stub = await useServer(t, response => {
+    // The daemon's real duplicate rejection.
+    json(response, { message: "Download rejected: Duplicate download detected (Headless mode)" }, 409);
+  });
+  await assert.rejects(
+    () => addDownload(stub.url, "tok", "https://ex.com/a.zip", ""),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === 409 &&
+      error.message === "That URL is already in the queue",
+  );
+});
+
 test("pause, resume and remove post the id as a query parameter", async t => {
   const stub = await useServer(t, response => json(response, { status: "ok" }));
   await pauseDownload(stub.url, "tok", "id with spaces");

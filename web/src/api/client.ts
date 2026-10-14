@@ -50,6 +50,9 @@ const request = async (
     } catch {
       // A body that will not read is not worth losing the status over.
     }
+    // The daemon answers a repeated URL with 409 and a raw JSON body; saying so
+    // in words is the difference between an error and an instruction.
+    if (response.status === 409) detail = "That URL is already in the queue";
     throw new ApiError(response.status, detail);
   }
   return response;

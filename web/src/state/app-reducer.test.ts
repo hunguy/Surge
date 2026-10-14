@@ -75,19 +75,33 @@ test("a resync keeps the elapsed a running row accumulated from the stream", () 
   assert.equal(state.downloads[0]!.elapsedSec, 12);
 });
 
-test("a resync replaces elapsed with the daemon's total once a row stops running", () => {
+test("a resync honours the daemon's total for a stopped row when it reports one", () => {
   let state = withDownloads([server({ id: "a" })]);
   state = appReducer(state, {
     type: "event",
     frame: event("progress", { type: 1, download_id: "a", elapsed: 99_000_000_000 }),
   });
-  // The daemon reports a shorter, authoritative time once the row is paused.
   state = appReducer(state, {
     type: "sync",
     downloads: [server({ id: "a", status: "paused", speed: 0, time_taken: 4_000 })],
   });
   assert.equal(state.downloads[0]!.elapsedSec, 4);
   assert.equal(state.downloads[0]!.status, "paused");
+});
+
+test("a resync keeps the elapsed of a paused row, which the daemon reports as zero", () => {
+  // /list sends time_taken: 0 for a paused row too, so without the carry-forward
+  // the elapsed line vanishes exactly when someone pauses to read it.
+  let state = withDownloads([server({ id: "a" })]);
+  state = appReducer(state, {
+    type: "event",
+    frame: event("progress", { type: 1, download_id: "a", elapsed: 42_000_000_000 }),
+  });
+  state = appReducer(state, {
+    type: "sync",
+    downloads: [server({ id: "a", status: "paused", speed: 0, time_taken: 0 })],
+  });
+  assert.equal(state.downloads[0]!.elapsedSec, 42);
 });
 
 test("a progress event patches only the row it names", () => {

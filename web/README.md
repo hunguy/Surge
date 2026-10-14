@@ -59,11 +59,13 @@ the stream off a `fetch` `ReadableStream` instead, with backoff and a give-up on
 
 Two behaviours worth knowing:
 
-- A `progress` event carries only `connections` and `elapsed` — no bytes, speed,
-  or percentage. Those come from the `/list` poll, which is why it runs every
-  2s rather than the extension's 60s; at 60s the progress bar would look frozen.
+- A `progress` event carries the full sample once a download is moving, but omits
+  `downloaded`, `speed` and `total` on its first frames and keeps omitting them
+  while the download is stalled. The `/list` poll every 2s reconciles rows and
+  covers that gap; the extension's 60s would leave a stalled row looking frozen.
 - Every field on a `DownloadEvent` is `omitempty`, so an absent number means
-  "not carried by this event" and is left alone, never read as zero.
+  "not carried by this event" and is left alone, never read as zero. That is what
+  makes the stalled case above work: a frame with no `speed` does not zero the row.
 
 ## Layout
 

@@ -204,9 +204,12 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         action.downloads.map(server => {
           const row = toUiDownload(server);
           const before = previous.get(row.id);
-          // /list reports time_taken: 0 for a running download, so a resync must
-          // not discard the seconds its progress events have accumulated.
-          return row.status === "active" && before && row.elapsedSec === 0
+          // /list reports time_taken: 0 for a running download, and for a paused
+          // one too, so a resync must not discard the seconds the progress events
+          // have accumulated. A row the daemon has stopped only keeps its own
+          // total when it reports one.
+          const stopped = row.status === "done" || row.status === "error";
+          return row.elapsedSec === 0 && before && !stopped
             ? { ...row, elapsedSec: before.elapsedSec }
             : row;
         }),
@@ -224,6 +227,9 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, log: [] };
 
     case "tick": {
+      // ponytail: samples the aggregate the last sync or event computed, so on a
+      // quiet daemon the series holds a stale value. Push live batches through the
+      // reducer instead if a per-second series ever needs to be exact.
       const throughput = advanceThroughput(state.throughput, state.downloadBps);
       return { ...state, throughput };
     }

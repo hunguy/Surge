@@ -91,7 +91,8 @@ export const streamEvents = (
     handlers.onStatus("connecting");
     let rest = "";
     try {
-      const response = await fetch(`${serverUrl}/events`, {
+      // Same trailing-slash strip as the client, or a pasted `.../` breaks only here.
+      const response = await fetch(`${serverUrl.replace(/\/+$/, "")}/events`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
         signal: abort.signal,
       });

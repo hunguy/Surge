@@ -14,9 +14,10 @@ import { appReducer, countsFor, initialState, type LogEntry } from "@/state/app-
 import type { Connection, Download, FilterValue, ThroughputPoint } from "@/types";
 
 /**
- * The daemon's `progress` events carry only `connections` and `elapsed`, so the
- * bytes, speed and progress a row shows come from /list. This poll is therefore
- * the live path, not just a safety net: at 5s the bar visibly steps.
+ * A `progress` event carries the full sample (downloaded, total, speed, elapsed)
+ * once data is moving, but omits the byte fields on its first frames and keeps
+ * omitting them while a download is stalled. This poll reconciles the list, covers
+ * that stall and any dropped frames, and surfaces queue changes between events.
  */
 const RESYNC_MS = 2_000;
 /** Server lines move faster than anyone reads them during a transfer. */
@@ -210,6 +211,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { serverUrl: url, token: auth } = connectionRef.current;
       void guard("Could not remove", async () => {
         await removeDownload(url, auth, id);
+        // The daemon's `removed` event carries the row name, but only if the
+        // stream is live, so confirm here too.
+        dispatch({ type: "log", level: "warning", message: `Removed ${nameOf(id)}` });
         dispatch({ type: "sync", downloads: await listDownloads(url, auth) });
       });
     },
