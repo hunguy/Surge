@@ -41,7 +41,10 @@ export default function HeaderBar() {
 
   return (
     <header className={styles.header}>
-      <h1 className={styles.title}>Surge</h1>
+      <h1 className={styles.title}>
+        <img className={styles.logo} src="/logo.png" alt="" width={21} height={24} />
+        Surge
+      </h1>
       <div className={styles.actions}>
         {/* The status pill opens the activity log and announces the newest line in passing. */}
         <button type="button" className={styles.status} onClick={() => setLogOpen(true)}>
