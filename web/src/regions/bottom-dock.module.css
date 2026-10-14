@@ -1,8 +1,0 @@
-.dock {
-  position: fixed;
-  z-index: 40;
-  right: clamp(var(--space-4), 4vw, var(--space-8));
-  bottom: var(--space-4);
-  display: flex;
-  align-items: center;
-}

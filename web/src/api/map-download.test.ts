@@ -119,3 +119,11 @@ test("applyProgress leaves eta alone while the download is not moving", () => {
 test("hostFor reads a port-qualified host verbatim", () => {
   assert.equal(hostFor("http://127.0.0.1:1700/list"), "127.0.0.1:1700");
 });
+
+test("hostFor drops subdomains so a row names the site, not a CDN node", () => {
+  assert.equal(hostFor("https://download.real-debrid.com/d/abc/file.mkv"), "real-debrid.com");
+  assert.equal(hostFor("https://a.b.c.example.co.uk/x"), "example.co.uk");
+  assert.equal(hostFor("http://localhost:8080/f"), "localhost:8080");
+  // Two labels where the last is a country: the second level is part of the name.
+  assert.equal(hostFor("https://cdn.example.com.au/f"), "example.com.au");
+});

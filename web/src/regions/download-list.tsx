@@ -67,6 +67,12 @@ export default function DownloadList() {
 
   return (
     <div className={styles.region}>
+      {/* The empty state carries its own action, so this toolbar appears only once there are rows to sit above. */}
+      <div className={styles.toolbar}>
+        <Button variant="secondary" size="sm" onClick={() => setAddUrlOpen(true)}>
+          Add download
+        </Button>
+      </div>
       <SwipeActions label="Downloads">
         {visibleDownloads.map(download => (
           <SwipeActionsRow

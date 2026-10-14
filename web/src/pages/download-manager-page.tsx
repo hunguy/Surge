@@ -4,7 +4,6 @@ import SpeedHero from "@/regions/speed-hero";
 import ThroughputChart from "@/regions/throughput-chart";
 import DownloadFilter from "@/regions/download-filter";
 import DownloadList from "@/regions/download-list";
-import BottomDock from "@/regions/bottom-dock";
 import AddUrlOverlay from "@/regions/add-url-overlay";
 import ActivityLogSheet from "@/regions/activity-log-sheet";
 import ConnectionSettingsDialog from "@/regions/connection-settings-dialog";
@@ -17,7 +16,6 @@ export default function DownloadManagerPage() {
       <ThroughputChart />
       <DownloadFilter />
       <DownloadList />
-      <BottomDock />
       <AddUrlOverlay />
       <ActivityLogSheet />
       <ConnectionSettingsDialog />

@@ -2,6 +2,12 @@
   display: grid;
 }
 
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--space-2);
+}
+
 .action {
   min-width: 8rem;
 }

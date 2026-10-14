@@ -29,7 +29,7 @@
   margin: 0;
 }
 
-/* Overflowing text runs right, so the end of a long name meets the status pill and the start is what scrolls out. */
+/* Overflowing text runs right to left, so the end of a long name is what stays readable beside the status pill. */
 .filenameText {
   display: block;
   overflow: hidden;
@@ -39,13 +39,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
-  text-align: left;
 }
 
-/* The host names the source and stays on the row; the path gives way first, then the host itself ellipsises. */
+/* The host names the source and takes the left edge; the save path takes the right and aligns to the inner edge. */
 .line {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;
 }
@@ -56,20 +56,20 @@
   overflow: hidden;
   color: var(--text-muted);
   font-size: var(--text-xs);
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
 }
 
 .host {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: none;
   overflow: hidden;
   color: var(--text-secondary);
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
 }
 
 /* Elapsed on the left, time remaining on the right, neither labelled. */

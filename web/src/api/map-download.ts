@@ -14,9 +14,34 @@ const STATUS: Record<string, DownloadStatus> = {
   purging: "queued",
 };
 
+/**
+ * Registrable-domain-ish. A full public-suffix list is a dependency and a data
+ * file, which is too much for a label: two labels, or three when the last is a
+ * country code and the one before it is short enough to be one (so
+ * `example.co.uk` and `example.com.au` hold, while `store.bbc.com` falls to
+ * `bbc.com`). A port survives, because it distinguishes a local daemon.
+ *
+ * ponytail: a public-suffix list is the fix if a two-letter second-level domain
+ * like `co.jp` or a private suffix like `github.io` ever needs to come out right.
+ */
+const domainOf = (host: string): string => {
+  // An IPv4 literal is four dot-labels, and the last two of them mean nothing.
+  // An IPv6 literal is already bracketed and has no labels to trim.
+  if (/^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/.test(host)) return host;
+  const labels = host.split(".");
+  if (labels.length <= 2) return host;
+  const last = labels.at(-1)!;
+  const secondLast = labels.at(-2)!;
+  const thirdLast = labels.at(-3);
+  const country = last.length === 2 && secondLast.length <= 3;
+  // Without a third label to spare (`co.uk` alone), there is nothing to trim.
+  if (country && thirdLast) return labels.slice(-3).join(".");
+  return labels.slice(-2).join(".");
+};
+
 export const hostFor = (url: string): string => {
   try {
-    return new URL(url).host;
+    return domainOf(new URL(url).host);
   } catch {
     return "unknown host";
   }

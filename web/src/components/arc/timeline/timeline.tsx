@@ -242,8 +242,10 @@ export function Timeline({ events, now, label, timeZone = "UTC", locale = "en-US
         {/* Presence starts enabled so markers keep their hidden first frame; rows and days present at mount opt out of entering themselves. */}
         <div ref={trackRef}><AnimatePresence>
           {groups.map(group => <DaySection key={group.day} id={`${id}-${group.day}`} fresh={!initialDays.has(group.day)} reduced={reduced}>
-            <div className={styles.day} role="heading" aria-level={headingLevel} id={`${id}-${group.day}`}>
-              <span>{group.label}</span>
+            {/* The label stays for the day section's accessible name, but the feed does not draw it: the rows are
+                already newest-first, so a "Today" heading restates what the order says. */}
+            <div className={styles.srOnly} role="heading" aria-level={headingLevel} id={`${id}-${group.day}`}>
+              {group.label}
             </div>
             <ol className={styles.list}>
               <AnimatePresence>
