@@ -1,0 +1,22 @@
+# Surge web client. The daemon it talks to is set in the app's Server settings,
+# so this stack serves the UI only.
+services:
+  web:
+    build: ./web
+    image: ghcr.io/surgedm/surge-web:latest
+    container_name: surge-web
+    ports:
+      # Published host port. Override with SURGE_WEB_PORT in .env; 1777 is the default.
+      # The container side stays 1777 to match the nginx conf baked into the image.
+      - "${SURGE_WEB_PORT:-1777}:1777"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1777/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
