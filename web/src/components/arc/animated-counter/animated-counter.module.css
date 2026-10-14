@@ -8,5 +8,7 @@
 .glyph { position: absolute; inset: var(--feather) 0; text-align: center; }
 .labelText { display: inline-block; }
 .labelSwap { position: relative; display: block; }
-.symbol { display: inline-block; overflow-x: clip; }
+/* Prefix and suffix are units, not figures: a step down from the value, recessed, and set off by a small gap. */
+.symbol { display: inline-block; overflow-x: clip; color: var(--text-secondary); font-size: var(--text-base); font-weight: 400; }
+.value > .symbol { margin-left: .25em; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

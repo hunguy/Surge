@@ -8,10 +8,7 @@
 .group { position: relative; }
 .group[data-entering] { overflow: clip; }
 /* Day labels stay pinned while their updates scroll under them. Set --timeline-surface when the feed sits on another surface. */
-.day { position: sticky; z-index: 2; top: 0; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) 0; background: var(--timeline-surface, var(--surface)); color: var(--foreground); font-size: var(--text-sm); font-weight: 500; line-height: var(--leading-body); }
-.count { color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; font-variant-numeric: tabular-nums; }
-.rolling { display: inline-flex; }
-.place { position: relative; display: inline-flex; overflow: clip; overflow-clip-margin: .15em; }
+.day { position: sticky; z-index: 2; top: 0; padding: var(--space-2) var(--space-3) var(--space-2) 0; background: var(--timeline-surface, var(--surface)); color: var(--foreground); font-size: var(--text-sm); font-weight: 500; line-height: var(--leading-body); }
 .rise { position: relative; display: inline-flex; }
 .riseLine { display: inline-block; white-space: nowrap; }
 .list { margin: 0 0 var(--space-3); padding: 0; list-style: none; }

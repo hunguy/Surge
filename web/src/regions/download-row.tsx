@@ -42,16 +42,16 @@ export default function DownloadRow({ download }: { download: Download }) {
     <article className={styles.row}>
       <div className={styles.head}>
         <h3 className={styles.filename} title={download.filename}>
-          {download.filename}
+          <span className={styles.filenameText}>{download.filename}</span>
         </h3>
         <Badge tone={TONES[download.status]}>{LABELS[download.status]}</Badge>
       </div>
 
       <div className={styles.line}>
+        <span className={styles.host}>{download.host}</span>
         <span className={styles.path} title={download.savePath}>
           {download.savePath}
         </span>
-        <span className={styles.host}>{download.host}</span>
       </div>
 
       {/* On a running download the speed replaces the progress label; the times line keeps elapsed on the left and remaining on the right for every row. */}

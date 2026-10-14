@@ -90,16 +90,6 @@ function RiseText({ text, reduced, direction = 1 }: { text: string; reduced: boo
   </span>;
 }
 
-/** The day's update count rolls digit by digit in the direction it moved. */
-function RollingCount({ value, reduced }: { value: number; reduced: boolean }) {
-  const [state, setState] = useState({ value, direction: 1 });
-  if (state.value !== value) setState({ value, direction: value > state.value ? 1 : -1 });
-  const chars = [...String(value)];
-  return <span className={styles.rolling} aria-hidden="true">
-    {chars.map((char, index) => <span key={chars.length - index} className={styles.place}><RiseText text={char} reduced={reduced} direction={state.direction} /></span>)}
-  </span>;
-}
-
 function dayKey(time: number, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(time));
   const get = (type: string) => parts.find(part => part.type === type)?.value ?? "";
@@ -254,8 +244,6 @@ export function Timeline({ events, now, label, timeZone = "UTC", locale = "en-US
           {groups.map(group => <DaySection key={group.day} id={`${id}-${group.day}`} fresh={!initialDays.has(group.day)} reduced={reduced}>
             <div className={styles.day} role="heading" aria-level={headingLevel} id={`${id}-${group.day}`}>
               <span>{group.label}</span>
-              <span className={styles.count} aria-hidden="true"><RollingCount value={group.rows.length} reduced={reduced} /> {group.rows.length === 1 ? "update" : "updates"}</span>
-              <span className={styles.srOnly}>{`, ${group.rows.length} ${group.rows.length === 1 ? "update" : "updates"}`}</span>
             </div>
             <ol className={styles.list}>
               <AnimatePresence>

@@ -1,7 +1,10 @@
 .card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-surface); padding: var(--space-6); background: var(--surface); box-shadow: var(--shadow-resting); }
 .top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-8); }
 .top span { color: var(--text-secondary); font-size: var(--text-sm); }
-.top small { display: inline-flex; flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 3px 8px; color: var(--text-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+/* line-height 1 with a fixed height keeps the pill optically centred on the label beside it, while the Swap inside
+   still needs the height to animate. */
+.top small { display: inline-flex; height: 22px; flex: 0 0 auto; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0 8px; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1; font-variant-numeric: tabular-nums; }
+.top small > span { align-items: center; }
 .card p { margin: var(--space-4) 0 0; color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-body); }
 @media (max-width: 380px) { .card { padding: var(--space-4); } .top { align-items: flex-start; flex-wrap: wrap; margin-bottom: var(--space-6); } }
 /* Text swaps: the outgoing copy is popped out of flow so the wrapper never holds both widths. */

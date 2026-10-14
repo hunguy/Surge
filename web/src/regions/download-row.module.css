@@ -1,5 +1,8 @@
 .row {
   display: grid;
+  /* An auto track floors at the widest child's min-content, and a nowrap filename's min-content is the whole name,
+     which would drag the status pill off the row. A fixed track keeps every child inside the content box. */
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   gap: var(--space-2);
   padding-block: var(--space-3);
@@ -7,32 +10,49 @@
 
 .head {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
 
+/* The status pill keeps its width; the name absorbs whatever has to give. */
+.head > :last-child {
+  flex: none;
+}
+
+/* The name takes what is left and never pushes the status off the row; the pill keeps its intrinsic width.
+   At 80% the name has a column of its own, so its box can end before the text does. */
 .filename {
   min-width: 0;
+  flex: 0 1 80%;
   margin: 0;
+}
+
+/* Overflowing text runs right, so the end of a long name meets the status pill and the start is what scrolls out. */
+.filenameText {
+  display: block;
   overflow: hidden;
   font-family: var(--font-display);
   font-size: var(--text-base);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
-/* Save path on the left, host right aligned on the same line. */
+/* The host names the source and stays on the row; the path gives way first, then the host itself ellipsises. */
 .line {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;
 }
 
 .path {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -41,10 +61,15 @@
 }
 
 .host {
-  flex: none;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
   color: var(--text-secondary);
   font-size: var(--text-xs);
+  text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 /* Elapsed on the left, time remaining on the right, neither labelled. */
