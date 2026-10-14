@@ -3,6 +3,7 @@ surge
 *.surge
 Surge
 Surge.exe
+surge_version.exe
 surge_bin
 *.trace
 
