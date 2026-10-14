@@ -72,6 +72,26 @@ func stubRunSystemctl(t *testing.T, fn func(args ...string) (string, error)) {
 	runSystemctl = fn
 }
 
+// stubRunLaunchctl replaces the launchctl runner for the duration of a test.
+func stubRunLaunchctl(t *testing.T, fn func(args ...string) (string, error)) {
+	t.Helper()
+	orig := runLaunchctl
+	t.Cleanup(func() { runLaunchctl = orig })
+	runLaunchctl = fn
+}
+
+// stubLaunchdRunning stubs launchctl so that it reports the Surge daemon as
+// loaded and running, the state a boot-loaded KeepAlive LaunchDaemon is in.
+func stubLaunchdRunning(t *testing.T) {
+	t.Helper()
+	stubRunLaunchctl(t, func(args ...string) (string, error) {
+		if args[0] != "print" {
+			t.Fatalf("unexpected launchctl %v; the daemon is already up", args)
+		}
+		return "system/surge = {\n\tstate = running\n\tpid = 97192\n}\n", nil
+	})
+}
+
 func waitStop(t *testing.T, p *program, s service.Service) {
 	stopErr := make(chan error, 1)
 	go func() {
@@ -307,6 +327,45 @@ func TestRunServiceActionExplainsDarwinLaunchDaemonNeedsRoot(t *testing.T) {
 	assert.Contains(t, err.Error(), "Input/output error", "the launchctl error should be preserved")
 }
 
+func TestRunServiceActionExplainsDarwinLoadFailure(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+	isElevatedFunc = func() bool { return true }
+
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	s.startFunc = func() error {
+		return fmt.Errorf("\"launchctl\" failed with stderr: Load failed: 5: Input/output error")
+	}
+
+	err := runServiceAction(s, "start")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already loaded")
+	assert.Contains(t, err.Error(), "service status")
+	assert.Contains(t, err.Error(), "Input/output error", "the launchctl error should be preserved")
+}
+
+func TestRunServiceActionPrefersRootHintOverDarwinLoadHint(t *testing.T) {
+	stubDarwinSystemDaemon(t)
+
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	s.startFunc = func() error {
+		return fmt.Errorf("\"launchctl\" failed with stderr: Load failed: 5: Input/output error")
+	}
+
+	err := runServiceAction(s, "start")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "sudo", "the root-privileges hint is the actionable one when unprivileged")
+	assert.NotContains(t, err.Error(), "already loaded", "the launchd-load hint must not muddy the root hint")
+}
+
+func TestExplainDarwinLoadFailedSkipsOtherErrors(t *testing.T) {
+	s := &mockService{platform: darwinLaunchdPlatform}
+
+	assert.Empty(t, explainDarwinLoadFailed(s, nil))
+	assert.Empty(t, explainDarwinLoadFailed(s, fmt.Errorf("permission denied")))
+	assert.Empty(t, explainDarwinLoadFailed(&mockService{platform: linuxSystemdPlatform},
+		fmt.Errorf("Load failed: 5: Input/output error")))
+}
+
 func TestExplainDarwinRootRequiredUsesActionName(t *testing.T) {
 	stubDarwinSystemDaemon(t)
 
@@ -339,6 +398,10 @@ func TestExplainDarwinRootRequiredSkipsWithoutDaemonAndOtherPlatforms(t *testing
 
 func TestServiceStartCmdExplainsDarwinLaunchDaemonNeedsRoot(t *testing.T) {
 	stubDarwinSystemDaemon(t)
+	// The daemon must not already be running, or the command short-circuits.
+	stubRunLaunchctl(t, func(args ...string) (string, error) {
+		return "system/surge = {\n\tstate = not running\n}\n", nil
+	})
 
 	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
 	s.startFunc = func() error {
@@ -354,6 +417,89 @@ func TestServiceStartCmdExplainsDarwinLaunchDaemonNeedsRoot(t *testing.T) {
 	assert.Error(t, runErr)
 	assert.Contains(t, runErr.Error(), "sudo")
 	assert.NotContains(t, out, "Service started successfully")
+}
+
+// TestServiceStartCmdDarwinAlreadyRunningIsNoop covers the reported failure:
+// macOS loads every plist in /Library/LaunchDaemons at boot and keeps a
+// KeepAlive daemon up, so `service start` on an already-running daemon reached
+// launchctl load, which rejects the already-loaded unit with
+// "Load failed: 5: Input/output error". The command must treat that as success.
+func TestServiceStartCmdDarwinAlreadyRunningIsNoop(t *testing.T) {
+	// kardianos reports StatusStopped here (its legacy `launchctl list` view
+	// hides the system daemon's PID from unprivileged callers); launchd itself
+	// reports it running.
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	s.startFunc = func() error {
+		return fmt.Errorf("\"launchctl\" failed with stderr: Load failed: 5: Input/output error")
+	}
+	withStubbedService(t, s, 0)
+	stubLaunchdRunning(t)
+
+	var runErr error
+	out := captureStdout(t, func() {
+		runErr = serviceStartCmd.RunE(serviceStartCmd, nil)
+	})
+
+	assert.NoError(t, runErr)
+	assert.Contains(t, out, "Service is already running")
+	assert.False(t, s.startCalled, "must not invoke launchctl load for a service that is already up")
+}
+
+func TestServiceStartCmdDarwinStartsWhenLaunchdReportsStopped(t *testing.T) {
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusRunning}
+	withStubbedService(t, s, 0)
+	stubRunLaunchctl(t, func(args ...string) (string, error) {
+		return "system/surge = {\n\tstate = not running\n}\n", nil
+	})
+
+	var runErr error
+	out := captureStdout(t, func() {
+		runErr = serviceStartCmd.RunE(serviceStartCmd, nil)
+	})
+
+	assert.NoError(t, runErr)
+	assert.True(t, s.startCalled, "a stopped daemon must still be started")
+	assert.Contains(t, out, "Service started successfully")
+}
+
+func TestDarwinServiceRunningFalseWhenLaunchctlCannotReport(t *testing.T) {
+	s := &mockService{platform: darwinLaunchdPlatform}
+	stubRunLaunchctl(t, func(args ...string) (string, error) {
+		return "Could not find service \"surge\" in domain for system", fmt.Errorf("exit status 113")
+	})
+
+	assert.False(t, darwinServiceRunning(s), "a failed launchctl print must not be read as running")
+}
+
+func TestServiceStatusCmdDarwinTrustsLaunchd(t *testing.T) {
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	withStubbedService(t, s, 0)
+	stubLaunchdRunning(t)
+
+	var runErr error
+	out := captureStdout(t, func() {
+		runErr = serviceStatusCmd.RunE(serviceStatusCmd, nil)
+	})
+
+	assert.NoError(t, runErr)
+	assert.Contains(t, out, "Service is running")
+	assert.NotContains(t, out, "Service is stopped")
+}
+
+func TestServiceStatusCmdDarwinStillReportsStoppedDaemon(t *testing.T) {
+	s := &mockService{platform: darwinLaunchdPlatform, status: service.StatusStopped}
+	withStubbedService(t, s, 0)
+	stubRunLaunchctl(t, func(args ...string) (string, error) {
+		return "system/surge = {\n\tstate = not running\n}\n", nil
+	})
+
+	var runErr error
+	out := captureStdout(t, func() {
+		runErr = serviceStatusCmd.RunE(serviceStatusCmd, nil)
+	})
+
+	assert.NoError(t, runErr)
+	assert.Contains(t, out, "Service is stopped")
 }
 
 func TestServiceStartCmdLeavesLinuxBehaviorAlone(t *testing.T) {
