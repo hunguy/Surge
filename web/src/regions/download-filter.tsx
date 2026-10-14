@@ -26,11 +26,13 @@ export default function DownloadFilter() {
         options={TABS.map(tab => ({
           value: tab.value,
           label: tab.label,
-          accessory: (
-            <Badge tone={TONES[tab.value]} size="sm">
-              {counts[tab.value]}
-            </Badge>
-          ),
+          // An empty tab shows no chip; a zero is noise in a label that already names the bucket.
+          accessory:
+            counts[tab.value] > 0 ? (
+              <Badge tone={TONES[tab.value]} size="sm">
+                {counts[tab.value]}
+              </Badge>
+            ) : null,
         }))}
       />
     </div>
