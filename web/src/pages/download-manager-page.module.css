@@ -3,7 +3,9 @@
   width: 100%;
   max-width: 720px;
   gap: var(--space-6);
-  padding: var(--space-6) clamp(var(--space-4), 4vw, var(--space-8)) 9rem;
+  /* Top padding clears the notch/status bar when installed to the home screen. */
+  padding: calc(var(--space-6) + env(safe-area-inset-top, 0px))
+    clamp(var(--space-4), 4vw, var(--space-8)) 9rem;
 }
 
 @media (min-width: 1024px) {
