@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useInView, useMotionValue, useReducedMotion, useTransform, type MotionValue, type Variants } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
 import styles from "./animated-counter.module.css";
+import { partsFor } from "./number-parts";
 
 export interface AnimatedCounterProps {
   value: number; label?: string; prefix?: string; suffix?: string; decimals?: number;
@@ -13,25 +14,10 @@ export interface AnimatedCounterProps {
   locale?: string;
 }
 
-type Part = { key: string; digit: number; order: number } | { key: string; text: string };
-
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const rise: Variants = { hidden: { opacity: 0, y: "0.3em", filter: `blur(${motionTokens.blur.soft}px)` }, shown: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] } }, gone: { opacity: 0, y: "-0.3em", filter: `blur(${motionTokens.blur.subtle}px)`, transition: { duration: motionTokens.duration.fast, ease: [...motionTokens.ease.standard] } } };
 const fade: Variants = { hidden: { opacity: 0, y: 0, filter: "blur(0px)" }, shown: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: motionTokens.duration.instant } }, gone: { opacity: 0, y: 0, filter: "blur(0px)", transition: { duration: motionTokens.duration.instant } } };
 const reveal = { ...motionTokens.spring.smooth, visualDuration: motionTokens.duration.considered };
-
-/** Split a formatted number into columns keyed by place value, so 999 → 1,000 keeps the ones column the ones column. */
-function partsFor(value: number, decimals: number, locale: string): Part[] {
-  const parts = new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals, numberingSystem: "latn" }).formatToParts(value);
-  let place = parts.reduce((count, part) => count + (part.type === "integer" ? part.value.length : 0), 0);
-  let fraction = 0;
-  let order = 0;
-  return parts.flatMap((part, index): Part[] => {
-    if (part.type === "integer") return [...part.value].map(char => ({ key: `i${--place}`, digit: Number(char), order: order++ }));
-    if (part.type === "fraction") return [...part.value].map(char => ({ key: `f${fraction++}`, digit: Number(char), order: order++ }));
-    return [{ key: part.type === "group" ? `g${place}` : part.type === "decimal" ? "d" : `${part.type}${index}`, text: part.value }];
-  });
-}
 
 /** One digit on the wheel. Its offset from the wheel position decides where it sits and how visible it is. */
 function Glyph({ position, digit }: { position: MotionValue<number>; digit: number }) {
@@ -82,7 +68,7 @@ export function AnimatedCounter({ value, label, prefix = "", suffix = "", decima
       <AnimatePresence initial={false}>
         {parts.map(part => "digit" in part
           ? <Column key={part.key} digit={part.digit} direction={direction} armed={armed} delay={Math.min(part.order * motionTokens.stagger.item, .25)} reduceMotion={reduceMotion} />
-          : <motion.span key={part.key} className={styles.symbol} {...presence} transition={reduceMotion ? { duration: 0 } : motionTokens.spring.morph}>{part.text}</motion.span>)}
+          : <motion.span key={part.key} className={part.separator ? styles.separator : styles.symbol} {...presence} transition={reduceMotion ? { duration: 0 } : motionTokens.spring.morph}>{part.text}</motion.span>)}
       </AnimatePresence>
       {suffix && <span className={styles.symbol}>{suffix}</span>}
     </span>
