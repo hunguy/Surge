@@ -8,10 +8,10 @@ import {
   resumeDownload,
   validateConnection,
 } from "@/api/client";
-import { readStoredConnection, writeStoredConnection } from "@/api/connection-storage";
+import { readSavedConnections, readStoredConnection, removeStoredConnection, saveStoredConnection, writeStoredConnection } from "@/api/connection-storage";
 import { streamEvents } from "@/api/sse";
 import { appReducer, countsFor, initialState, type LogEntry } from "@/state/app-reducer";
-import type { Connection, Download, FilterValue, ThroughputPoint } from "@/types";
+import type { Connection, Download, FilterValue, SavedConnection, ThroughputPoint } from "@/types";
 
 /**
  * A `progress` event carries the full sample (downloaded, total, speed, elapsed)
@@ -30,6 +30,8 @@ export type AppValue = {
   counts: Record<FilterValue, number>;
   throughput: ThroughputPoint[];
   connection: Connection;
+  /** Named connections the user kept, seeded from storage after mount. */
+  savedConnections: SavedConnection[];
   log: LogEntry[];
   addUrlOpen: boolean;
   connectionOpen: boolean;
@@ -43,7 +45,8 @@ export type AppValue = {
   resume: (id: string) => void;
   remove: (id: string) => void;
   addUrl: (url: string, savePath: string) => void;
-  saveConnection: (serverUrl: string, token: string) => void;
+  saveConnection: (name: string, serverUrl: string, token: string) => void;
+  removeSavedConnection: (name: string) => void;
   disconnect: () => void;
   setAddUrlOpen: (open: boolean) => void;
   setConnectionOpen: (open: boolean) => void;
@@ -79,9 +82,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Disconnect — without it that effect still holds the previous pair and no-ops.
   const [saveSeq, setSaveSeq] = useState(0);
 
+  // localStorage is the store; this holds its last read so the tiles re-render.
+  const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
+
   // Stored prefs are read after mount, so the first render is identical on every pass.
   useEffect(() => {
     dispatch({ type: "adoptConnection", connection: readStoredConnection() });
+    setSavedConnections(readSavedConnections());
   }, []);
 
   // Persisted on every connection change; writeStoredConnection saves only the
@@ -175,11 +182,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => dispatch({ type: "disconnect" }), []);
   const clearLog = useCallback(() => dispatch({ type: "clearLog" }), []);
 
-  const saveConnection = useCallback((nextUrl: string, nextToken: string) => {
+  const saveConnection = useCallback((name: string, nextUrl: string, nextToken: string) => {
     // The effect above validates; this only stages the credentials and asks it to run.
     dispatch({ type: "adoptConnection", connection: { serverUrl: nextUrl, token: nextToken, connected: false } });
-    dispatch({ type: "log", level: "info", message: `Saved server ${nextUrl}` });
+    setSavedConnections(saveStoredConnection({ name, serverUrl: nextUrl, token: nextToken }));
+    dispatch({ type: "log", level: "info", message: `Saved ${name}` });
     setSaveSeq(seq => seq + 1);
+  }, []);
+
+  const removeSavedConnection = useCallback((name: string) => {
+    setSavedConnections(removeStoredConnection(name));
   }, []);
 
   const pause = useCallback(
@@ -246,6 +258,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       counts: countsFor(state.downloads),
       throughput: state.throughput,
       connection: state.connection,
+      savedConnections,
       // Trim only what is rendered: the reducer keeps a longer tail for dedupe.
       log: state.log.length > LOG_WINDOW ? state.log.slice(-LOG_WINDOW) : state.log,
       addUrlOpen: state.addUrlOpen,
@@ -259,6 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       remove,
       addUrl,
       saveConnection,
+      removeSavedConnection,
       disconnect,
       setAddUrlOpen,
       setConnectionOpen,
@@ -267,12 +281,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [
     state,
+    savedConnections,
     setFilter,
     pause,
     resume,
     remove,
     addUrl,
     saveConnection,
+    removeSavedConnection,
     disconnect,
     setAddUrlOpen,
     setConnectionOpen,

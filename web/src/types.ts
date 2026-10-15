@@ -24,6 +24,13 @@ export type Connection = {
   connected: boolean;
 };
 
+/** A connection the user named and kept. The name is the identity: saving it again replaces it. */
+export type SavedConnection = {
+  name: string;
+  serverUrl: string;
+  token: string;
+};
+
 export type ThroughputPoint = {
   key: string;
   label: string;

@@ -1,4 +1,4 @@
-import type { Connection } from "../types.ts";
+import type { Connection, SavedConnection } from "../types.ts";
 
 /** The port `surge server` binds when none is given. See bindServerListener. */
 export const DEFAULT_CONNECTION: Connection = {
@@ -37,6 +37,47 @@ export const writeStoredConnection = (connection: Connection): void => {
       STORAGE_KEY,
       JSON.stringify({ serverUrl: connection.serverUrl, token: connection.token }),
     );
+  } catch {
+    // A blocked storage API only means the app forgets between reloads.
+  }
+};
+
+const SAVED_KEY = "surge-saved-connections";
+
+/** Read the named connections. Called after mount, like readStoredConnection. */
+export const readSavedConnections = (): SavedConnection[] => {
+  try {
+    const raw = window.localStorage.getItem(SAVED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap(entry => {
+      if (typeof entry !== "object" || entry === null) return [];
+      const { name, serverUrl, token } = entry as Partial<SavedConnection>;
+      if (!name || typeof serverUrl !== "string" || typeof token !== "string") return [];
+      return [{ name, serverUrl, token }];
+    });
+  } catch {
+    return [];
+  }
+};
+
+/** Saved under the name alone: reusing a name overwrites that tile rather than stacking a duplicate. */
+export const saveStoredConnection = (saved: SavedConnection): SavedConnection[] => {
+  const next = [...readSavedConnections().filter(entry => entry.name !== saved.name), saved];
+  writeSavedConnections(next);
+  return next;
+};
+
+export const removeStoredConnection = (name: string): SavedConnection[] => {
+  const next = readSavedConnections().filter(entry => entry.name !== name);
+  writeSavedConnections(next);
+  return next;
+};
+
+const writeSavedConnections = (saved: SavedConnection[]): void => {
+  try {
+    window.localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
   } catch {
     // A blocked storage API only means the app forgets between reloads.
   }
