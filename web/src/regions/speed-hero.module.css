@@ -1,11 +1,12 @@
 .row {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
 }
 
 @media (min-width: 480px) {
   .row {
-    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
 }
 
