@@ -41,19 +41,23 @@ test("initial state is disconnected, empty, and shows no configured server", () 
 });
 
 test("sync adopts the list and drops rows the daemon no longer has, including removed ones", () => {
+  // Newest first, so the list the daemon sends arrives reversed.
   let state = withDownloads([server({ id: "a" }), server({ id: "b" })]);
-  assert.deepEqual(state.downloads.map(row => row.id), ["a", "b"]);
+  assert.deepEqual(state.downloads.map(row => row.id), ["b", "a"]);
 
   state = appReducer(state, { type: "sync", downloads: [server({ id: "b" })] });
   assert.deepEqual(state.downloads.map(row => row.id), ["b"]);
 });
 
-test("a queued row carries no progress bar movement and is numbered in list order", () => {
+test("a queued row carries no progress bar movement and is numbered in display order", () => {
   const state = withDownloads([
     server({ id: "a", status: "queued", downloaded: 0, total_size: 0, progress: 0, speed: 0, eta: 0 }),
     server({ id: "b" }),
     server({ id: "c", status: "queued", downloaded: 0, total_size: 0, progress: 0, speed: 0, eta: 0 }),
   ]);
+  // Newest first: c, b, a. Only the queued rows take a number, and they number in
+  // the order they are shown rather than the order the daemon listed them.
+  assert.deepEqual(state.downloads.map(row => row.id), ["c", "b", "a"]);
   assert.equal(state.downloads[0]!.queuePosition, 1);
   assert.equal(state.downloads[1]!.queuePosition, undefined);
   assert.equal(state.downloads[2]!.queuePosition, 2);
@@ -109,9 +113,11 @@ test("a progress event patches only the row it names", () => {
     type: "event",
     frame: event("progress", { type: 1, download_id: "a", downloaded: 500, speed: 100 }),
   });
-  assert.equal(state.downloads[0]!.progress, 50);
-  assert.equal(state.downloads[0]!.speedBps, 100);
-  assert.equal(state.downloads[1]!.progress, 25);
+  // Newest first, so b leads and a sits behind it. A patch must not move a row.
+  assert.deepEqual(state.downloads.map(row => row.id), ["b", "a"]);
+  assert.equal(state.downloads[1]!.progress, 50);
+  assert.equal(state.downloads[1]!.speedBps, 100);
+  assert.equal(state.downloads[0]!.progress, 25);
 });
 
 test("a progress event for an unknown id adds the row without dropping the rest", () => {
@@ -126,8 +132,9 @@ test("a progress event for an unknown id adds the row without dropping the rest"
       total: 100,
     }),
   });
-  assert.deepEqual(state.downloads.map(row => row.id), ["a", "late"]);
-  assert.equal(state.downloads[1]!.progress, 10);
+  // The row arrives after the one already there, so newest first puts it in front.
+  assert.deepEqual(state.downloads.map(row => row.id), ["late", "a"]);
+  assert.equal(state.downloads[0]!.progress, 10);
 });
 
 test("a queued event lands as a queued row, not an active one", () => {
@@ -227,4 +234,49 @@ test("downloadedMB counts finished totals plus the moved part of live rows", () 
     server({ id: "c", status: "queued", total_size: 9_000_000, downloaded: 0, progress: 0 }),
   ]);
   assert.equal(state.downloadedMB, 4);
+});
+
+test("a resync does not reshuffle the list when /list reorders its rows", () => {
+  // /list iterates a Go map, so the same rows come back in a different order every
+  // poll. The list must hold still, newest first.
+  let state = withDownloads([server({ id: "a" }), server({ id: "b" }), server({ id: "c" })]);
+  const first = state.downloads.map(row => row.id);
+  assert.deepEqual(first, ["c", "b", "a"]);
+
+  for (const shuffle of [["b", "c", "a"], ["a", "b", "c"], ["c", "a", "b"]]) {
+    state = appReducer(state, {
+      type: "sync",
+      downloads: shuffle.map(id => server({ id })),
+    });
+    assert.deepEqual(state.downloads.map(row => row.id), first);
+  }
+});
+
+test("a newly added download lands first and older rows keep their place", () => {
+  let state = withDownloads([server({ id: "a" }), server({ id: "b" })]);
+  assert.deepEqual(state.downloads.map(row => row.id), ["b", "a"]);
+
+  // A queued event is how a new download arrives before /list has seen it.
+  state = appReducer(state, {
+    type: "event",
+    frame: event("queued", { type: 5, download_id: "new", filename: "n.bin", url: "https://ex.com/n" }),
+  });
+  assert.equal(state.downloads[0]!.id, "new");
+  assert.deepEqual(state.downloads.slice(1).map(row => row.id), ["b", "a"]);
+
+  // The resync that follows reports all three, in map order again.
+  state = appReducer(state, {
+    type: "sync",
+    downloads: [server({ id: "b" }), server({ id: "new", status: "queued" }), server({ id: "a" })],
+  });
+  assert.deepEqual(state.downloads.map(row => row.id), ["new", "b", "a"]);
+});
+
+test("a daemon that reports added_at is sorted on it, newest first", () => {
+  const state = withDownloads([
+    server({ id: "old", added_at: 1_000 }),
+    server({ id: "newest", added_at: 3_000 }),
+    server({ id: "mid", added_at: 2_000 }),
+  ]);
+  assert.deepEqual(state.downloads.map(row => row.id), ["newest", "mid", "old"]);
 });

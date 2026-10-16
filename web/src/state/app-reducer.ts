@@ -65,6 +65,31 @@ const logEntry = (level: LogEntry["level"], message: string, log: LogEntry[]): L
 const patch = (downloads: Download[], id: string, next: (row: Download) => Download): Download[] =>
   downloads.map(row => (row.id === id ? next(row) : row));
 
+/**
+ * Newest first, and stable across resyncs. `/list` returns active downloads in Go
+ * map order, which changes on every poll, and the daemon does not fill added_at
+ * today; so a row with no timestamp is stamped once when it first appears and the
+ * list sorts on that stamp. A row the daemon stops reporting keeps its stamp if it
+ * comes back, and a real added_at wins over the stamp as soon as one arrives.
+ *
+ * Ordering first, then queue positions, so the numbers a queued row shows follow
+ * the order it is displayed in.
+ */
+const orderDownloads = (downloads: Download[], previous: Map<string, Download>): Download[] => {
+  let next = downloads.reduce((high, row) => Math.max(high, previous.get(row.id)?.addedSeq ?? 0), 0);
+  const stamped = downloads.map(row => {
+    const before = previous.get(row.id);
+    return { ...row, addedSeq: before?.addedSeq ?? ++next };
+  });
+  stamped.sort((left, right) => {
+    const byAddedAt = right.addedAt - left.addedAt;
+    if (left.addedAt > 0 && right.addedAt > 0 && byAddedAt !== 0) return byAddedAt;
+    if (left.addedAt > 0 !== right.addedAt > 0) return left.addedAt > 0 ? -1 : 1;
+    return (right.addedSeq ?? 0) - (left.addedSeq ?? 0);
+  });
+  return withQueuePositions(stamped);
+};
+
 /** Rewrite one row's status, refilling the fields that status implies. */
 const restatus = (downloads: Download[], id: string, status: Download["status"]): Download[] =>
   withQueuePositions(
@@ -118,12 +143,13 @@ const applyEvent = (state: AppState, frame: SseFrame): AppState => {
   const exists = state.downloads.some(row => row.id === id);
   let downloads = state.downloads;
   let success: string | null = null;
+  const previous = () => new Map(downloads.map(row => [row.id, row]));
 
   switch (frame.name) {
     case "queued":
       if (!exists) {
         const row = rowFromEvent(event);
-        if (row) downloads = withQueuePositions([...downloads, { ...row, status: "queued" }]);
+        if (row) downloads = orderDownloads([...downloads, { ...row, status: "queued" }], previous());
       }
       break;
 
@@ -134,7 +160,7 @@ const applyEvent = (state: AppState, frame: SseFrame): AppState => {
     case "progress":
       if (!exists) {
         const row = rowFromEvent(event);
-        if (row) downloads = [...downloads, row];
+        if (row) downloads = orderDownloads([...downloads, row], previous());
       } else {
         downloads = patch(downloads, id, row => applyProgress(row, event));
       }
@@ -200,7 +226,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case "sync": {
       const previous = new Map(state.downloads.map(row => [row.id, row]));
-      const downloads = withQueuePositions(
+      const downloads = orderDownloads(
         action.downloads.map(server => {
           const row = toUiDownload(server);
           const before = previous.get(row.id);
@@ -213,6 +239,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             ? { ...row, elapsedSec: before.elapsedSec }
             : row;
         }),
+        previous,
       );
       return { ...state, downloads, ...liveStats(downloads) };
     }

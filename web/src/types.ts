@@ -15,6 +15,12 @@ export type Download = {
   /** 1-based, queued rows only. */
   queuePosition?: number;
   totalBytes?: number;
+  /** Unix seconds the download was added, or 0 when the daemon did not report one.
+   *  The daemon does not fill this today, so a 0 falls back to the arrival stamp. */
+  addedAt: number;
+  /** Arrival order, newest highest, stamped once when a row is first seen. `/list`
+   *  returns active rows in Go map order, so this is what keeps the list still. */
+  addedSeq?: number;
 };
 
 export type Connection = {

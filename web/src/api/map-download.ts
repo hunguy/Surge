@@ -78,6 +78,9 @@ export const toUiDownload = (server: ServerDownload): Download => {
     elapsedSec: Math.round((server.time_taken || 0) / 1000),
     etaSec: status === "active" && server.eta > 0 ? server.eta : null,
     totalBytes: total > 0 ? total : undefined,
+    // Unix seconds from the daemon, or 0 when it does not report one. The reducer
+    // falls back to stamping arrival order in that case.
+    addedAt: server.added_at > 0 ? server.added_at : 0,
   };
 };
 
@@ -114,6 +117,7 @@ export const rowFromEvent = (event: ServerEvent): Download | null => {
     elapsedSec: 0,
     etaSec: null,
     totalBytes: total > 0 ? total : undefined,
+    addedAt: 0,
   };
 };
 

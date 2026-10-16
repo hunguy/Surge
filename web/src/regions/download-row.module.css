@@ -29,6 +29,12 @@
   flex: 0 1 80%;
   margin: 0;
   overflow: hidden;
+  /* The heading sets the size, not just its child. The h3's own font decides the line
+     box the row is measured on: left at the UA default (18.72px) a marquee line stood
+     4px taller and sat 3px lower than a still one. */
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-body);
 }
 
 .filenameText {
@@ -54,9 +60,11 @@
   pointer-events: none;
 }
 
-/* Two copies travel by one name plus the gap, so the loop lands on the same pixels it started from. */
+/* Two copies travel by one name plus the gap, so the loop lands on the same pixels it started from.
+   Block-level, not inline-flex: an inline-level track sits on the baseline and adds a pixel the
+   still rows do not have, so a scrolling name would ride low against its neighbours. */
 .marquee {
-  display: inline-flex;
+  display: flex;
   width: max-content;
   gap: var(--space-8);
   animation: filename-marquee var(--marquee-duration) linear infinite;

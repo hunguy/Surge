@@ -16,6 +16,8 @@ export type ServerDownload = {
   /** Seconds remaining. Zero when the daemon has no estimate. */
   eta: number;
   connections: number;
+  /** Unix seconds. The daemon's own List does not fill this yet, so it arrives as 0
+   *  and the client falls back to stamping arrival order. */
   added_at: number;
   /** Milliseconds. */
   time_taken: number;
