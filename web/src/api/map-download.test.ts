@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyProgress, countFor, filterMatches, hostFor, toUiDownload, withQueuePositions } from "./map-download.ts";
+import { applyProgress, countFor, filterMatches, formatBytes, hostFor, toUiDownload, withQueuePositions } from "./map-download.ts";
 import type { ServerDownload } from "./types.ts";
 import type { Download } from "../types.ts";
 
@@ -21,6 +21,30 @@ const server = (over: Partial<ServerDownload> = {}): ServerDownload => ({
   time_taken: 4000,
   avg_speed: 250,
   ...over,
+});
+
+// Same expectations as the daemon's own formatter test (cmd/cli_test.go), so the
+// size in the table matches what `surge ls` prints.
+test("formatBytes matches utils.FormatBytes", () => {
+  const cases: [number, string][] = [
+    [0, "0 B"],
+    [512, "512 B"],
+    // The ladder is whole-unit below 10 and one decimal at or above it, so these
+    // three straddle the cutoff rather than test a size.
+    [999, "999 B"],
+    [9 * 1024 * 1024, "9.0 MiB"],
+    [10 * 1024 * 1024, "10 MiB"],
+    [1024, "1.0 KiB"],
+    [1536, "1.5 KiB"],
+    [1024 * 1024, "1.0 MiB"],
+    [34 * 1024 * 1024, "34 MiB"],
+    [2 * 1024 ** 3, "2.0 GiB"],
+    [12 * 1024 ** 3, "12 GiB"],
+    [5 * 1024 ** 4, "5.0 TiB"],
+  ];
+  for (const [bytes, want] of cases) {
+    assert.equal(formatBytes(bytes), want, `${bytes} bytes`);
+  }
 });
 
 // scheduler.buildStatus is the only producer of these strings.

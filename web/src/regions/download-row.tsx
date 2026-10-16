@@ -2,6 +2,7 @@ import styles from "./download-row.module.css";
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Badge, { type BadgeTone } from "@/components/arc/badge/badge";
 import Progress from "@/components/arc/progress/progress";
+import { formatBytes } from "@/api/map-download.ts";
 import type { DownloadStatus, Download } from "@/types";
 
 /** Travel speed while a long name is moving. A marquee has to be linear, so this is not a motion-token duration. */
@@ -110,7 +111,14 @@ export default function DownloadRow({ download }: { download: Download }) {
     <article className={styles.row}>
       <div className={styles.head}>
         <Filename name={download.filename} />
-        <Badge tone={TONES[download.status]}>{LABELS[download.status]}</Badge>
+        <div className={styles.chips}>
+          {/* A queued row has no total until the daemon prechecks it, and there is
+              no honest size to print before that, so the chip is simply absent. */}
+          {download.totalBytes !== undefined && (
+            <Badge tone="neutral">{formatBytes(download.totalBytes)}</Badge>
+          )}
+          <Badge tone={TONES[download.status]}>{LABELS[download.status]}</Badge>
+        </div>
       </div>
 
       <div className={styles.line}>

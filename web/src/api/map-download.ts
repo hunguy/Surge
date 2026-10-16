@@ -47,6 +47,22 @@ export const hostFor = (url: string): string => {
   }
 };
 
+const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+
+/**
+ * Mirrors utils.FormatBytes in internal/utils/units.go, which wraps
+ * humanize.IBytes: one decimal below 10, none at or above, so 2 GiB reads
+ * "2.0 GiB" and 34 MiB reads "34 MiB". Keeping the two in step means a size in
+ * the table matches the size `surge ls` prints for the same download.
+ */
+export const formatBytes = (bytes: number): string => {
+  if (!(bytes > 0)) return "0 B";
+  if (bytes < 10) return `${Math.round(bytes)} B`;
+  const exponent = Math.min(UNITS.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const value = Math.floor((bytes / 1024 ** exponent) * 10 + 0.5) / 10;
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${UNITS[exponent]}`;
+};
+
 const folderOf = (path: string): string => {
   if (!path) return "";
   const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));

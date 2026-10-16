@@ -16,9 +16,12 @@
   gap: var(--space-3);
 }
 
-/* The status pill keeps its width; the name absorbs whatever has to give. */
-.head > :last-child {
+/* Size and status travel together on the right, keeping their width while the name absorbs what gives. */
+.chips {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /* The name takes what is left and never pushes the status off the row; the pill keeps its intrinsic width.
