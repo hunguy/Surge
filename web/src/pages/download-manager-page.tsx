@@ -19,6 +19,7 @@ export default function DownloadManagerPage() {
       <AddUrlOverlay />
       <ActivityLogSheet />
       <ConnectionSettingsDialog />
+      <footer className={styles.version}>v{__APP_VERSION__}</footer>
     </div>
   );
 }

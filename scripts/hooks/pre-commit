@@ -1,0 +1,21 @@
+#!/bin/sh
+# Raises the web UI's version on every commit, so a deployed build can be named
+# out loud. vite.config.ts inlines package.json's version into the bundle and the
+# page footer prints it.
+#
+# Installed by pointing git at this directory:
+#   git config core.hooksPath scripts/hooks
+set -e
+
+root=$(git rev-parse --show-toplevel)
+
+if ! command -v npm >/dev/null 2>&1; then
+	# Loud rather than silent: a version that stops rising is worse than a failed commit.
+	echo "pre-commit: npm not found, cannot raise the web UI version" >&2
+	exit 1
+fi
+
+# --no-git-tag-version raises package.json and package-lock.json and stops there.
+# This hook owns the commit; npm must not start one of its own.
+npm --prefix "$root/web" version patch --no-git-tag-version >/dev/null
+git add "$root/web/package.json" "$root/web/package-lock.json"

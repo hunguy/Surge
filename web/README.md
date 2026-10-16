@@ -27,7 +27,9 @@ npm run lint     # oxlint
 
 Open the app, then **Options → Server settings** and enter the server URL
 (`http://127.0.0.1:1700`) and the token. Both are saved in this browser and
-validated on save; the header badge reads Connected once the daemon answers.
+validated on save; the header badge then names that server, green while the
+daemon answers and "Not connected" in red when it stops. The version the UI was
+built from sits in the bottom-right corner of the page.
 
 ## What is interactive
 
@@ -37,8 +39,10 @@ validated on save; the header badge reads Connected once the daemon answers.
   `components/arc/swipe-actions/swipe-actions.tsx`, so the menu never renders.)
 - **Add URL** opens a bottom sheet on phones and a dialog from 768px up, and
   posts to `/download` with the optional destination path.
-- **The status pill** opens the activity log: server `system` lines plus local
-  connection and action results. Clear is local only.
+- **The status pill** names the connected server (its saved name and address), or
+  says it is not connected. It opens the activity log, which holds the server
+  `system` lines plus local connection and action results. A new line takes the
+  pill for ten seconds before the server label returns. Clear is local only.
 - **Theme switch** in the settings dialog moves between Arc's light and dark
   themes and is stored on the device.
 

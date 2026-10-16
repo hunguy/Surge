@@ -329,6 +329,19 @@ The Docker image builds the app with `npm run build` and serves the result from
 nginx on an `nginx:alpine-slim` base. See [`web/README.md`](web/README.md) for
 the layout, the endpoints the UI calls, and how it talks to the daemon.
 
+### The version stamp
+
+The UI prints its own version in the bottom-right corner of the page, read from
+`web/package.json` at build time. `scripts/hooks/pre-commit` raises that version on
+every commit and stages the bump, so a deployed build can be named out loud:
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+That is one-time per clone. A relative `core.hooksPath` resolves against `.git`, not
+the working tree, so the value has to be relative to the repository root as written.
+
 ---
 
 ## Fonts

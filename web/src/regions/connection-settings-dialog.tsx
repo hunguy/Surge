@@ -8,17 +8,9 @@ import { PasswordField } from "@/components/arc/password-field/password-field";
 import Button from "@/components/arc/button/button";
 import Alert from "@/components/arc/alert/alert";
 import { useApp } from "@/state/app-state";
+import { hostOf, savedNameFor } from "@/regions/server-label";
 import { useTheme } from "@/regions/use-theme";
 import type { SavedConnection } from "@/types";
-
-/** The host alone, since the port and scheme rarely tell two servers apart. */
-const hostOf = (serverUrl: string): string => {
-  try {
-    return new URL(serverUrl).host;
-  } catch {
-    return serverUrl;
-  }
-};
 
 /** The dialog body unmounts when closed, so it opens on the current saved values. */
 export default function ConnectionSettingsDialog() {
@@ -28,10 +20,7 @@ export default function ConnectionSettingsDialog() {
 
   // Reloading a tile starts a form that is already named, so opening on a server you have
   // saved again and pressing Save overwrites that tile instead of adding a second one.
-  const currentName =
-    savedConnections.find(
-      entry => entry.serverUrl === connection.serverUrl && entry.token === connection.token,
-    )?.name ?? "";
+  const currentName = savedNameFor(connection, savedConnections) ?? "";
 
   return (
     <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>

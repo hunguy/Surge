@@ -3,13 +3,25 @@
   width: 100%;
   max-width: 720px;
   gap: var(--space-6);
+  /* Named so the version stamp can reclaim it and sit at the bottom of the page. */
+  --page-pad-bottom: 9rem;
   /* Top padding clears the notch/status bar when installed to the home screen. */
   padding: calc(var(--space-6) + env(safe-area-inset-top, 0px))
-    clamp(var(--space-4), 4vw, var(--space-8)) 9rem;
+    clamp(var(--space-4), 4vw, var(--space-8)) var(--page-pad-bottom);
 }
 
 @media (min-width: 1024px) {
   .page {
     padding-inline: var(--space-8);
   }
+}
+
+/* Last row of the page grid, right-aligned: the bottom-right corner the brief asked for.
+   Muted and small, so it reads as a stamp rather than a control. The negative margin
+   settles it into the trailing space the page keeps for the keyboard and the sheets. */
+.version {
+  justify-self: end;
+  margin-bottom: calc(-1 * var(--page-pad-bottom) + var(--space-6));
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
