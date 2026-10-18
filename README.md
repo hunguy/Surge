@@ -163,6 +163,20 @@ surge service status
 surge connect
 ```
 
+##### One-command rebuild
+
+`scripts/dev-refresh.sh` performs the build, copy, relabel, and (optionally)
+the service refresh above in a single step:
+
+```bash
+./scripts/dev-refresh.sh              # rebuild + copy + relabel
+./scripts/dev-refresh.sh --service    # also refresh and restart the service
+```
+
+Set `SURGE_INSTALL_DIR` to deploy elsewhere (for example `~/.local/bin`, which
+needs no `sudo`). `--service` only refreshes a service that is already
+installed; it never creates one.
+
 - Run `service install`/`start` through the **installed** path
   (`/usr/local/bin/surge`), never `sudo ./surge` from the repo — otherwise
   `ExecStart` points back at the home directory and SELinux blocks it again.
@@ -171,6 +185,11 @@ surge connect
 - Stop using a Homebrew-installed binary before switching to a source build, and
   remove any leftover `/usr/local/bin/surge` symlink (`sudo rm -f …`) so the copy
   above replaces it with a real file.
+- For CLI-only use there is no system copy to make: keep the build directory
+  ahead of any installed binary on your `PATH`
+  (`export PATH="$HOME/Code/Surge:$PATH"`), rebuild with `go build -o surge .`,
+  and `surge` runs the new build — no `install`, no `restorecon`. Check what
+  actually resolves with `which -a surge`.
 - The daemon uses the service user's home for config/state (`/root/...`) and
   writes runtime files (port/token) to `/run/surge`, so `surge connect`
   auto-detects it without `sudo`.
