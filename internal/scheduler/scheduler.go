@@ -974,8 +974,9 @@ func sendPausedFallback(ch chan<- types.DownloadEvent, cfg *types.DownloadRecord
 }
 
 // shouldRetryFailedDownload reports whether a failed download should be
-// requeued for another attempt. Cancel, deadline, permanent HTTP, and
-// disk-full errors are excluded — retrying them is pointless.
+// requeued for another attempt. Cancel, deadline, permanent HTTP, disk-full,
+// and checksum-mismatch errors are excluded — retrying the same state is
+// pointless (a restart re-probes and starts from zero).
 func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool {
 	if isShuttingDown {
 		return false
@@ -984,6 +985,9 @@ func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool
 		return false
 	}
 	if types.IsPermanentHTTPError(err) {
+		return false
+	}
+	if errors.Is(err, types.ErrChecksumMismatch) {
 		return false
 	}
 	if errors.Is(err, types.ErrRetryBudgetExceeded) {

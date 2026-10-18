@@ -446,6 +446,13 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	// Range header is always set for partial downloads (overrides any browser Range header)
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", task.Offset, task.Offset+task.Length-1))
 	req.Header.Set("Accept-Encoding", "identity")
+	// Only the primary origin is held to the probed validator: mirrors are
+	// commonly fronted by different software and legitimately return their own
+	// ETag for byte-identical content. A mismatch here makes the server answer
+	// 200 instead of 206, which the caller already treats as a safe restart.
+	if d.IfRange != "" && rawurl == d.URL {
+		req.Header.Set("If-Range", d.IfRange)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

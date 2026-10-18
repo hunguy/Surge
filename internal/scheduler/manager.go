@@ -163,6 +163,9 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			RateLimitSet: rateLimitSet,
 			Workers:      cfg.Runtime.Workers,
 			MinChunkSize: cfg.Runtime.MinChunkSize,
+			ETag:         cfg.ETag,
+			LastModified: cfg.LastModified,
+			Checksum:     cfg.Checksum,
 		}, ctx.Done())
 	}
 
@@ -217,6 +220,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		d.ImportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
+		d.IfRange = cfg.RangeValidator() // Hold resumed ranges to the probed representation
 		d.RateLimitBps = cfg.RateLimit
 		d.RateLimitSet = cfg.RateLimitSet
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
@@ -237,6 +241,32 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			utils.Debug("Concurrent download failed: %v - falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
 			cfg.SupportsRange = false
+
+			// The transfer starts over from byte zero, so the metadata from the
+			// original probe may no longer describe the source: an If-Range
+			// mismatch means the origin changed under us. Re-probe to bind the
+			// restart to the representation we are about to download. When the
+			// probe fails we drop the identity instead of comparing the fresh
+			// body against a digest from the old representation.
+			if refreshed, probeErr := probe.ProbeServerWithProxy(ctx, cfg.URL, cfg.Filename, cfg.Headers, cfg.Runtime); probeErr == nil && refreshed != nil {
+				cfg.ETag = refreshed.ETag
+				cfg.LastModified = refreshed.LastModified
+				cfg.Checksum = refreshed.Checksum
+				if refreshed.FileSize > 0 {
+					cfg.TotalSize = refreshed.FileSize
+					effectiveTotalSize = refreshed.FileSize
+				}
+			} else {
+				utils.Debug("Range fallback: re-probe failed (%v), dropping source identity", probeErr)
+				cfg.ETag = ""
+				cfg.LastModified = ""
+				cfg.Checksum = ""
+				cfg.TotalSize = 0
+				effectiveTotalSize = 0
+			}
+			if err := store.UpdateSourceIdentity(cfg.ID, cfg.ETag, cfg.LastModified, cfg.Checksum); err != nil {
+				utils.Debug("Range fallback: failed to persist refreshed source identity: %v", err)
+			}
 
 			// Reset progress state cleanly for single-stream restart from byte 0
 			if progState != nil {
@@ -297,6 +327,16 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 	if errors.Is(downloadErr, types.ErrPaused) {
 		utils.Debug("Download paused cleanly")
 		return downloadErr
+	}
+
+	// Never promote a file whose bytes were not fully written or do not match
+	// the source. A verification failure is a terminal error: retrying the same
+	// state cannot change the bytes on disk.
+	if downloadErr == nil {
+		if err := verifyCompletedDownload(cfg, progState, finalDestPath, effectiveTotalSize); err != nil {
+			utils.Debug("Verification failed for %s: %v", finalDestPath, err)
+			downloadErr = err
+		}
 	}
 
 	// Physical download success takes precedence over late-arriving pause signals.

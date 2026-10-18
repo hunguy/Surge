@@ -44,6 +44,15 @@ type resumeResultMsg struct {
 	err error
 }
 
+// restartResultMsg reports the outcome of a restart-from-zero request. oldID is
+// the discarded download and id is the freshly queued one.
+type restartResultMsg struct {
+	oldID    string
+	id       string
+	filename string
+	err      error
+}
+
 // startupConfigWarningMsg carries config validation warnings to display in the
 // activity log during Init, after the viewport is sized and ready.
 type startupConfigWarningMsg []string

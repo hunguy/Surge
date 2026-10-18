@@ -35,6 +35,11 @@ var (
 	// ErrRangeUnsupported indicates the server returned 200 OK without range content when requested
 	ErrRangeUnsupported = errors.New("server indicated success (200) but ignored range request (expected 206)")
 
+	// ErrChecksumMismatch marks a finished transfer whose bytes do not match
+	// the source: a size/coverage failure, or a disagreement with the digest
+	// the origin advertised. Retrying the same state cannot fix it.
+	ErrChecksumMismatch = errors.New("checksum mismatch")
+
 	// ErrRetryBudgetExceeded ends automatic retries while retaining resumable data.
 	ErrRetryBudgetExceeded = errors.New("automatic retry budget exhausted")
 )

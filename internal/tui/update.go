@@ -295,6 +295,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case RemoveConfirmState:
 			return m.updateRemoveConfirm(msg)
 
+		case RestartDownloadConfirmState:
+			return m.updateRestartDownloadConfirm(msg)
+
 		default:
 			return m, nil
 		}

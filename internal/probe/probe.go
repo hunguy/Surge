@@ -39,6 +39,14 @@ type ProbeResult struct {
 	DetectedFilename string
 	ContentType      string
 	Warning          string
+
+	// Representation identity, used to keep a paused/restarted transfer on the
+	// same bytes the probe inspected.
+	ETag         string
+	LastModified string
+	// Checksum is a whole-file digest in "algo:hex" form, empty when the
+	// origin did not advertise one.
+	Checksum string
 }
 
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
@@ -238,6 +246,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	}
 
 	result.ContentType = resp.Header.Get("Content-Type")
+	captureSourceValidators(resp, result)
 	result.Warning = suspiciousResponseWarning(result.Filename, result.ContentType, result.FileSize)
 	if result.Warning != "" {
 		utils.Debug("Probe warning: %s", result.Warning)
@@ -290,6 +299,14 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, runCfg *typ
 	}
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", runCfg.GetUserAgent())
+	}
+	// Ask origins that support content digests to include one. Ignored by
+	// servers that do not implement either header.
+	if req.Header.Get("Want-Digest") == "" {
+		req.Header.Set("Want-Digest", "sha-256")
+	}
+	if req.Header.Get("x-amz-checksum-mode") == "" {
+		req.Header.Set("x-amz-checksum-mode", "ENABLED")
 	}
 }
 

@@ -48,6 +48,7 @@ type DashboardKeyMap struct {
 	BatchImport      key.Binding
 	Search           key.Binding
 	Pause            key.Binding
+	Restart          key.Binding
 	Refresh          key.Binding
 	Delete           key.Binding
 	PurgeFile        key.Binding
@@ -468,6 +469,10 @@ func DefaultKeyMap() *KeyMap {
 				key.WithKeys("p"),
 				key.WithHelp("p", "pause/resume"),
 			),
+			Restart: key.NewBinding(
+				key.WithKeys("R", "shift+r"),
+				key.WithHelp("shift+r", "restart"),
+			),
 			Refresh: key.NewBinding(
 				key.WithKeys("r"),
 				key.WithHelp("r", "refresh url"),
@@ -811,7 +816,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
-		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Refresh, k.CopyURL, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
+		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Restart, k.Refresh, k.CopyURL, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
 		{k.Log, k.OpenFile, k.OpenFolder, k.ToggleHelp, k.ReportBug, k.Quit},
 	}
 }

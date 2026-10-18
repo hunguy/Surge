@@ -293,6 +293,13 @@ func (ps *DownloadProgress) RecalculateProgress(remainingTasks []types.Task) {
 	ps.Bytes.VerifiedProgress.Store(totalVerified)
 }
 
+// AllChunksComplete reports whether every tracked byte range has been fully
+// written. It reports true when the download used a single stream and never
+// initialized a chunk bitmap.
+func (ps *DownloadProgress) AllChunksComplete(totalSize int64) bool {
+	return ps.Bitmap.AllChunksComplete(totalSize)
+}
+
 func (ps *DownloadProgress) GetBitmap() ([]byte, int, int64, int64, []int64) {
 	return ps.GetBitmapSnapshot(true)
 }

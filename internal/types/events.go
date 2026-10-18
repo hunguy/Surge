@@ -59,6 +59,12 @@ type DownloadEvent struct {
 	MinChunkSize int64    `json:"min_chunk_size,omitempty"`
 	Mirrors      []string `json:"mirrors,omitempty"`
 
+	// Source identity echo so lifecycle persistence keeps the validators that
+	// enqueue captured from the probe.
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"last_modified,omitempty"`
+	Checksum     string `json:"checksum,omitempty"`
+
 	// Request
 	Headers              map[string]string `json:"headers,omitempty"`
 	Path                 string            `json:"path,omitempty"`

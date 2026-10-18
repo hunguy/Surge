@@ -464,3 +464,48 @@ func TestRemoteDownloadService_StreamEvents_ReceivesMessages(t *testing.T) {
 		t.Errorf("timed out waiting for message")
 	}
 }
+
+func TestRemoteDownloadService_Restart_ProxiesRequest(t *testing.T) {
+	var method, path, id string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path, id = r.Method, r.URL.Path, r.URL.Query().Get("id")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"restarted","id":"new-download-id"}`))
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	newID, err := svc.Restart("old-download-id")
+	if err != nil {
+		t.Fatalf("Restart failed: %v", err)
+	}
+	if method != http.MethodPost || path != "/restart" || id != "old-download-id" {
+		t.Fatalf("request = %s %s?id=%s, want POST /restart?id=old-download-id", method, path, id)
+	}
+	if newID != "new-download-id" {
+		t.Fatalf("new id = %q, want new-download-id", newID)
+	}
+}
+
+func TestRemoteDownloadService_Restart_RejectsMissingID(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"restarted"}`))
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	if _, err := svc.Restart("old-id"); err == nil {
+		t.Fatal("expected an error when the daemon returns no new id")
+	}
+}

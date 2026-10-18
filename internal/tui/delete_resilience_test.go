@@ -11,8 +11,22 @@ import (
 )
 
 type mockService struct {
-	deleteErr error
-	deletedID string
+	deleteErr    error
+	deletedID    string
+	restartErr   error
+	restartedID  string
+	restartNewID string
+}
+
+func (m *mockService) Restart(id string) (string, error) {
+	m.restartedID = id
+	if m.restartErr != nil {
+		return "", m.restartErr
+	}
+	if m.restartNewID != "" {
+		return m.restartNewID, nil
+	}
+	return "new-" + id, nil
 }
 
 func (m *mockService) Delete(id string) error {

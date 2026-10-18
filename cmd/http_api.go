@@ -64,6 +64,15 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "resumed", "id": id})
 	})))
 
+	mux.HandleFunc("/restart", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
+		newID, err := service.Restart(id)
+		if err != nil {
+			http.Error(w, err.Error(), statusCodeForRestartError(err))
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "restarted", "id": newID})
+	})))
+
 	mux.HandleFunc("/delete", requireMethods(withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Delete(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -253,6 +262,19 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": status, "rate": rateStr})
 	}))
+}
+
+func statusCodeForRestartError(err error) int {
+	switch {
+	case errors.Is(err, types.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, types.ErrCompleted):
+		return http.StatusConflict
+	case errors.Is(err, types.ErrServiceUnavailable):
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func statusCodeForRateLimitError(err error) int {

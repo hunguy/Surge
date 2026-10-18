@@ -409,6 +409,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			RateLimitSet: cfg.RateLimitSet,
 			Workers:      req.Workers,
 			MinChunkSize: req.MinChunkSize,
+			ETag:         cfg.ETag,
+			LastModified: cfg.LastModified,
+			Checksum:     cfg.Checksum,
 		}
 		// Persist synchronously before publishing so the download survives a restart
 		// even if the event bus is full and Publish returns DeadlineExceeded.
@@ -426,6 +429,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			RateLimitSet: queuedEvent.RateLimitSet,
 			Workers:      queuedEvent.Workers,
 			MinChunkSize: queuedEvent.MinChunkSize,
+			ETag:         queuedEvent.ETag,
+			LastModified: queuedEvent.LastModified,
+			Checksum:     queuedEvent.Checksum,
 		}); err != nil {
 			utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
 		}
@@ -443,6 +449,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 				Workers:      cfg.Workers,
 				MinChunkSize: cfg.MinChunkSize,
 				Headers:      maps.Clone(cfg.Headers),
+				ETag:         cfg.ETag,
+				LastModified: cfg.LastModified,
+				Checksum:     cfg.Checksum,
 			}
 			if err := store.SaveStateWithOptions(cfg.URL, queuedEvent.DestPath, snapshot, store.SaveStateOptions{SkipFileHash: true}); err != nil {
 				if rollbackErr := store.DeleteState(cfg.ID); rollbackErr != nil {
@@ -526,6 +535,10 @@ func (mgr *LifecycleManager) buildDownloadRecord(req *DownloadRequest, requestID
 		SupportsRange:      probeResult.SupportsRange,
 		RateLimit:          rateLimit,
 		RateLimitSet:       rateLimitSet,
+		ETag:               probeResult.ETag,
+		LastModified:       probeResult.LastModified,
+		Checksum:           probeResult.Checksum,
+		SkipChecksumVerify: !config.Resolve[bool](settings.General.VerifyCompleted),
 	}
 
 	if mgr.eventBus != nil {

@@ -335,6 +335,38 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 	return total
 }
 
+// AllChunksComplete reports whether every tracked chunk has been written in
+// full. Downloads that never used chunk tracking (single-stream) report true.
+func (b *BitmapTracker) AllChunksComplete(totalSize int64) bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	if len(b.chunkStatus) == 0 || b.actualChunkSize <= 0 {
+		return true
+	}
+	if totalSize <= 0 {
+		return false
+	}
+
+	for i := 0; i < b.width; i++ {
+		chunkStart := int64(i) * b.actualChunkSize
+		chunkEnd := chunkStart + b.actualChunkSize
+		if chunkEnd > totalSize {
+			chunkEnd = totalSize
+		}
+		if chunkEnd <= chunkStart {
+			continue
+		}
+		if types.ChunkStatus(b.chunkStatus[i].Load()) != types.ChunkCompleted {
+			return false
+		}
+		if b.chunkProgress[i].Load() < chunkEnd-chunkStart {
+			return false
+		}
+	}
+	return true
+}
+
 // GetBitmapSnapshot returns a copy of bitmap metadata and optionally chunk progress.
 func (b *BitmapTracker) GetBitmapSnapshot(totalSize int64, includeProgress bool) ([]byte, int, int64, int64, []int64) {
 	b.mu.RLock()

@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -69,6 +70,18 @@ type DownloadRecord struct {
 	Workers      int      `json:"workers,omitempty"`
 	MinChunkSize int64    `json:"min_chunk_size,omitempty"`
 
+	// Source identity & integrity, captured when the download was probed.
+	// ETag is only stored when it is strong enough for If-Range. Checksum is a
+	// whole-file digest in "algo:hex" form and may be empty.
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"last_modified,omitempty"`
+	Checksum     string `json:"checksum,omitempty"`
+
+	// SkipChecksumVerify disables the digest comparison at completion. The
+	// structural checks (size and chunk coverage) always run. Zero value keeps
+	// digest verification on, so callers that bypass settings still verify.
+	SkipChecksumVerify bool `json:"-"`
+
 	// Execution & Throttle State (Transient across retries)
 	ThrottleEpisodeStart time.Time `json:"-"`
 
@@ -83,6 +96,20 @@ type DownloadRecord struct {
 	Limiter            ByteLimiter          `json:"-"`
 	IsExplicitCategory bool                 `json:"-"`
 	SupportsRange      bool                 `json:"-"`
+}
+
+// RangeValidator returns the HTTP validator to send in If-Range for this
+// download: a strong ETag when available, otherwise Last-Modified. Both
+// compare byte-for-byte as the server sent them, so quotes are preserved.
+func (r *DownloadRecord) RangeValidator() string {
+	if r == nil {
+		return ""
+	}
+	etag := strings.TrimSpace(r.ETag)
+	if etag != "" && !strings.HasPrefix(strings.ToUpper(etag), "W/") {
+		return etag
+	}
+	return strings.TrimSpace(r.LastModified)
 }
 
 // MasterList holds all tracked downloads.

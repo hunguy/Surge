@@ -38,6 +38,7 @@ type GeneralSettings struct {
 	DefaultDownloadDir           *Setting `json:"default_download_dir"`
 	WarnOnDuplicate              *Setting `json:"warn_on_duplicate"`
 	DownloadCompleteNotification *Setting `json:"download_complete_notification"`
+	VerifyCompleted              *Setting `json:"verify_completed"`
 	AutoShutdownAfterDownloads   *Setting `json:"auto_shutdown_after_downloads"`
 	AllowRemoteOpenActions       *Setting `json:"allow_remote_open_actions"`
 	AutoResume                   *Setting `json:"auto_resume"`
@@ -258,6 +259,7 @@ func (s *Settings) initializeCategoriesList() {
 				s.General.DefaultDownloadDir,
 				s.General.WarnOnDuplicate,
 				s.General.DownloadCompleteNotification,
+				s.General.VerifyCompleted,
 				s.General.AutoShutdownAfterDownloads,
 				s.General.AllowRemoteOpenActions,
 				s.General.AutoResume,
@@ -551,6 +553,14 @@ func DefaultSettings() *Settings {
 				Key:          "download_complete_notification",
 				Label:        "Download Complete Notification",
 				Description:  "Show system notification when a download finishes.",
+				Type:         TypeBool,
+				DefaultValue: true,
+				Value:        true,
+			},
+			VerifyCompleted: &Setting{
+				Key:          "verify_completed",
+				Label:        "Verify Completed Downloads",
+				Description:  "Check a finished file's size and chunk coverage, and compare the server's checksum when one is advertised.",
 				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,

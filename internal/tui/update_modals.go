@@ -556,6 +556,52 @@ func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+func (m RootModel) updateRestartDownloadConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmRestart := func() (tea.Model, tea.Cmd) {
+		targetID := m.restartTargetID
+		m.restartTargetID = ""
+		m.quitConfirmFocused = 0
+		m.state = DashboardState
+
+		svc := m.Service
+		if svc == nil {
+			m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+			return m, nil
+		}
+
+		filename := ""
+		if d := m.FindDownloadByID(targetID); d != nil {
+			filename = d.Filename
+		}
+
+		return m, func() tea.Msg {
+			newID, err := svc.Restart(targetID)
+			return restartResultMsg{oldID: targetID, id: newID, filename: filename, err: err}
+		}
+	}
+
+	cancelRestart := func() (tea.Model, tea.Cmd) {
+		m.restartTargetID = ""
+		m.quitConfirmFocused = 0
+		m.state = DashboardState
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmRestart()
+	case yesNoNo, yesNoCancel:
+		return cancelRestart()
+	}
+
+	return m, nil
+}
+
 func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	confirmPurge := func() (tea.Model, tea.Cmd) {
 		targetID := m.purgeTargetID

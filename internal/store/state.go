@@ -65,6 +65,9 @@ type persistedDetailRecord struct {
 	Workers         int
 	MinChunkSize    int64
 	Headers         map[string]string
+	ETag            string
+	LastModified    string
+	Checksum        string
 }
 
 func toPersistedDetail(state *types.DownloadRecord) *persistedDetailRecord {
@@ -98,6 +101,9 @@ func toPersistedDetail(state *types.DownloadRecord) *persistedDetailRecord {
 		Workers:         state.Workers,
 		MinChunkSize:    state.MinChunkSize,
 		Headers:         maps.Clone(state.Headers),
+		ETag:            state.ETag,
+		LastModified:    state.LastModified,
+		Checksum:        state.Checksum,
 	}
 }
 
@@ -132,6 +138,9 @@ func fromPersistedDetail(state *persistedDetailRecord) *types.DownloadRecord {
 		Workers:         state.Workers,
 		MinChunkSize:    state.MinChunkSize,
 		Headers:         maps.Clone(state.Headers),
+		ETag:            state.ETag,
+		LastModified:    state.LastModified,
+		Checksum:        state.Checksum,
 	}
 }
 
@@ -568,6 +577,37 @@ func RemoveFromMasterList(id string) error {
 	}
 	list.Downloads = out
 	return saveMasterListLocked(list)
+}
+
+// UpdateSourceIdentity rewrites the representation validators of an existing
+// master-list record. Downloads that re-probe mid-transfer (the range
+// fallback after an If-Range mismatch) use it so later resumes are bound to the
+// representation that is actually on disk. Unknown IDs are a no-op.
+func UpdateSourceIdentity(id, etag, lastModified, checksum string) error {
+	if id == "" {
+		return nil
+	}
+
+	masterMu.Lock()
+	defer masterMu.Unlock()
+
+	if baseDir == "" {
+		return nil
+	}
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
+	for i := range list.Downloads {
+		if list.Downloads[i].ID != id {
+			continue
+		}
+		list.Downloads[i].ETag = etag
+		list.Downloads[i].LastModified = lastModified
+		list.Downloads[i].Checksum = checksum
+		return saveMasterListLocked(list)
+	}
+	return nil
 }
 
 func GetDownload(id string) (*types.DownloadRecord, error) {

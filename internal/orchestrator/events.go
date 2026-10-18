@@ -122,9 +122,21 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				RateLimitSet: m.RateLimitSet,
 				Workers:      m.Workers,
 				MinChunkSize: m.MinChunkSize,
+				ETag:         m.ETag,
+				LastModified: m.LastModified,
+				Checksum:     m.Checksum,
 			}
 			if existing, _ := store.GetDownload(m.DownloadID); existing != nil {
 				entry.Mirrors = append([]string(nil), existing.Mirrors...)
+				if entry.ETag == "" {
+					entry.ETag = existing.ETag
+				}
+				if entry.LastModified == "" {
+					entry.LastModified = existing.LastModified
+				}
+				if entry.Checksum == "" {
+					entry.Checksum = existing.Checksum
+				}
 				if existing.Downloaded > 0 {
 					entry.Downloaded = existing.Downloaded
 				}
@@ -287,9 +299,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			if existing != nil {
 				entry.URL = existing.URL
 				entry.URLHash = existing.URLHash
+				entry.ETag = existing.ETag
+				entry.LastModified = existing.LastModified
+				entry.Checksum = existing.Checksum
 			} else {
 				entry.URL = url
 				entry.URLHash = store.URLHash(url)
+				entry.ETag = snapshot.ETag
+				entry.LastModified = snapshot.LastModified
+				entry.Checksum = snapshot.Checksum
 			}
 			if err := store.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to persist paused state: %v", err)
@@ -351,6 +369,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				if existing != nil {
 					errEntry.Workers = existing.Workers
 					errEntry.MinChunkSize = existing.MinChunkSize
+					errEntry.ETag = existing.ETag
+					errEntry.LastModified = existing.LastModified
+					errEntry.Checksum = existing.Checksum
 				}
 				if err := store.AddToMasterList(errEntry); err != nil {
 					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
@@ -386,6 +407,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			if existing != nil {
 				entry.Workers = existing.Workers
 				entry.MinChunkSize = existing.MinChunkSize
+				entry.ETag = existing.ETag
+				entry.LastModified = existing.LastModified
+				entry.Checksum = existing.Checksum
 			}
 			if err := store.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
@@ -507,8 +531,14 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				if existing != nil {
 					entry.URLHash = existing.URLHash
 					entry.Mirrors = append([]string(nil), existing.Mirrors...)
+					entry.ETag = existing.ETag
+					entry.LastModified = existing.LastModified
+					entry.Checksum = existing.Checksum
 				} else {
 					entry.URLHash = store.URLHash(url)
+					entry.ETag = snapshot.ETag
+					entry.LastModified = snapshot.LastModified
+					entry.Checksum = snapshot.Checksum
 				}
 				if err := store.AddToMasterList(entry); err != nil {
 					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
@@ -596,6 +626,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 					RateLimitSet: m.RateLimitSet,
 					Workers:      m.Workers,
 					MinChunkSize: m.MinChunkSize,
+					ETag:         m.ETag,
+					LastModified: m.LastModified,
+					Checksum:     m.Checksum,
 				}); err != nil {
 					utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
 				}

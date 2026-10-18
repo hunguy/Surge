@@ -123,6 +123,13 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 	return s.lifecycle.ResumeBatch(ids)
 }
 
+func (s *LocalDownloadService) Restart(id string) (string, error) {
+	if s.lifecycle == nil {
+		return "", types.ErrServiceUnavailable
+	}
+	return s.lifecycle.Restart(id)
+}
+
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable

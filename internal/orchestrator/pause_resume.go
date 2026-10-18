@@ -75,6 +75,17 @@ func hydrateConfigFromDisk(cfg *types.DownloadRecord) {
 	if len(cfg.Headers) == 0 && len(saved.Headers) > 0 {
 		cfg.Headers = maps.Clone(saved.Headers)
 	}
+	// Keep the resume bound to the representation the probe captured, even when
+	// the in-memory record predates the first pause snapshot.
+	if cfg.ETag == "" {
+		cfg.ETag = saved.ETag
+	}
+	if cfg.LastModified == "" {
+		cfg.LastModified = saved.LastModified
+	}
+	if cfg.Checksum == "" {
+		cfg.Checksum = saved.Checksum
+	}
 }
 
 // Resume resumes a paused download.
@@ -353,6 +364,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 	var totalSize, downloaded int64
 	var rateLimit int64
 	var rateLimitSet bool
+	var etag, lastModified, checksum string
 
 	if entry != nil {
 		destPath = entry.DestPath
@@ -362,6 +374,9 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 		downloaded = entry.Downloaded
 		rateLimit = entry.RateLimit
 		rateLimitSet = entry.RateLimitSet
+		etag = entry.ETag
+		lastModified = entry.LastModified
+		checksum = entry.Checksum
 	} else if savedState != nil {
 		destPath = savedState.DestPath
 		url = savedState.URL
@@ -370,6 +385,9 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 		downloaded = savedState.Downloaded
 		rateLimit = savedState.RateLimit
 		rateLimitSet = savedState.RateLimitSet
+		etag = savedState.ETag
+		lastModified = savedState.LastModified
+		checksum = savedState.Checksum
 	}
 
 	runtime := settings.ToRuntimeConfig()
@@ -386,6 +404,21 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 		runtime.MinChunkSize = savedState.MinChunkSize
 	} else if entry != nil && entry.MinChunkSize > 0 {
 		runtime.MinChunkSize = entry.MinChunkSize
+	}
+
+	// The master record is authoritative for representation identity: it is what
+	// a mid-transfer re-probe rewrites. Only fall back to the pause snapshot
+	// when the master entry does not carry a validator.
+	if savedState != nil {
+		if etag == "" {
+			etag = savedState.ETag
+		}
+		if lastModified == "" {
+			lastModified = savedState.LastModified
+		}
+		if checksum == "" {
+			checksum = savedState.Checksum
+		}
 	}
 
 	var mirrorURLs []string
@@ -447,5 +480,10 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 		Tasks:           tasks,
 		ChunkBitmap:     chunkBitmap,
 		ActualChunkSize: actualChunkSize,
+		ETag:            etag,
+		LastModified:    lastModified,
+		Checksum:        checksum,
+		SkipChecksumVerify: settings == nil ||
+			!config.Resolve[bool](settings.General.VerifyCompleted),
 	}
 }

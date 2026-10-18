@@ -43,6 +43,7 @@ func (s *countingLifecycleService) AddWithID(string, string, string, []string, m
 func (s *countingLifecycleService) Pause(string) error             { return nil }
 func (s *countingLifecycleService) Resume(string) error            { return nil }
 func (s *countingLifecycleService) ResumeBatch([]string) []error   { return nil }
+func (s *countingLifecycleService) Restart(string) (string, error) { return "", nil }
 func (s *countingLifecycleService) UpdateURL(string, string) error { return nil }
 func (s *countingLifecycleService) Delete(string) error            { return nil }
 func (s *countingLifecycleService) Purge(string) error             { return nil }

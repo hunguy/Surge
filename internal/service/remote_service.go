@@ -236,6 +236,26 @@ func (s *RemoteDownloadService) ResumeBatch(ids []string) []error {
 	return errs
 }
 
+// Restart discards a download's progress and queues it again from zero on the
+// remote daemon, returning the ID of the new download.
+func (s *RemoteDownloadService) Restart(id string) (string, error) {
+	resp, err := s.doRequest("POST", "/restart?id="+url.QueryEscape(id), nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+
+	var result map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	newID := result["id"]
+	if newID == "" {
+		return "", fmt.Errorf("restart failed: daemon returned no download id")
+	}
+	return newID, nil
+}
+
 // UpdateURL updates the URL of a paused or errored download via the remote API.
 func (s *RemoteDownloadService) UpdateURL(id string, newURL string) error {
 	req := map[string]string{

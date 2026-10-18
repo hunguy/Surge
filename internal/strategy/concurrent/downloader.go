@@ -43,14 +43,17 @@ type ConcurrentDownloader struct {
 	TotalSize          int64
 	bufPool            sync.Pool
 	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
-	hostLimiter        *transport.HostRateLimiter
-	workerHosts        []string
-	soft403Mu          sync.Mutex
-	forbiddenByMirror  map[string]int
-	nonRangeMirrors    map[string]bool
-	soft403Progress    int64
-	soft403Since       time.Time
-	concurrencyGate    *adaptiveConcurrencyGate
+	// IfRange binds every primary-origin range request to the representation
+	// seen at probe time. Empty disables the check.
+	IfRange           string
+	hostLimiter       *transport.HostRateLimiter
+	workerHosts       []string
+	soft403Mu         sync.Mutex
+	forbiddenByMirror map[string]int
+	nonRangeMirrors   map[string]bool
+	soft403Progress   int64
+	soft403Since      time.Time
+	concurrencyGate   *adaptiveConcurrencyGate
 	// completing is set when the completion monitor has decided the download
 	// is done. Worker taskCtx cancel is then a completion signal, not a stall.
 	completing atomic.Bool

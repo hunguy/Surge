@@ -49,6 +49,8 @@ func (f *fakeRemoteDownloadService) Resume(id string) error { return nil }
 
 func (f *fakeRemoteDownloadService) ResumeBatch(ids []string) []error { return nil }
 
+func (f *fakeRemoteDownloadService) Restart(id string) (string, error) { return "restarted-" + id, nil }
+
 func (f *fakeRemoteDownloadService) UpdateURL(id string, newURL string) error { return nil }
 
 func (f *fakeRemoteDownloadService) Delete(id string) error { return nil }

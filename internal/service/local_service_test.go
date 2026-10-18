@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -449,5 +450,64 @@ func TestLocalDownloadService_Delete(t *testing.T) {
 	_, err = svc.GetStatus(id)
 	if err == nil {
 		t.Error("expected error getting status of deleted download")
+	}
+}
+
+func TestLocalDownloadService_Restart(t *testing.T) {
+	svc, globalTs, tmpDir, removed := setupTestService(t)
+	defer globalTs.Close()
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	blockCh := make(chan struct{})
+	restartTs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		if r.Header.Get("Range") != "" {
+			w.Header().Set("Content-Range", "bytes 0-0/1024")
+			w.Header().Set("Content-Length", "1")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte{0})
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		select {
+		case <-blockCh:
+		case <-r.Context().Done():
+		}
+	}))
+	defer restartTs.Close()
+	defer close(blockCh)
+
+	const oldID = "restart-service-id"
+	id, err := svc.AddWithID(restartTs.URL+"/restart.txt", tmpDir, "restart.txt", nil, nil, oldID, false, 1, 0)
+	if err != nil {
+		t.Fatalf("AddWithID failed: %v", err)
+	}
+
+	newID, err := svc.Restart(id)
+	if err != nil {
+		t.Fatalf("Restart failed: %v", err)
+	}
+	if newID == "" || newID == id {
+		t.Fatalf("new id = %q, want a fresh id distinct from %q", newID, id)
+	}
+
+	if _, err := svc.GetStatus(id); !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("GetStatus(old) error = %v, want ErrNotFound", err)
+	}
+	status, err := svc.GetStatus(newID)
+	if err != nil {
+		t.Fatalf("GetStatus(new) failed: %v", err)
+	}
+	if status.Downloaded != 0 {
+		t.Fatalf("restarted download starts at %d bytes, want 0", status.Downloaded)
+	}
+
+	select {
+	case got := <-removed:
+		if got != id {
+			t.Fatalf("removal event for %q, want %q", got, id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the old download's removal event")
 	}
 }

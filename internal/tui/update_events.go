@@ -76,6 +76,23 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.spinner.Tick
 
+	case restartResultMsg:
+		if msg.err != nil {
+			m.addLogEntry(LogStyleError.Render("\u2716 Restart failed: " + msg.err.Error()))
+			return m, nil
+		}
+		// The daemon also emits a removal event for the discarded download; this
+		// covers the local case and keeps the list correct if it raced ahead.
+		m.removeDownloadByID(msg.oldID)
+		label := msg.filename
+		if label == "" {
+			label = "download"
+		}
+		m.addLogEntry(LogStyleStarted.Render("\u21bb Restarted from 0: " + label))
+		m.cachedTotalSpeed = m.calcTotalSpeedBps()
+		m.UpdateListItems()
+		return m, m.spinner.Tick
+
 	case enqueueSuccessMsg:
 		if msg.tempID != "" && msg.tempID != msg.id {
 			temp := m.FindDownloadByID(msg.tempID)
@@ -263,7 +280,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.resuming = false
 			d.Speed = 0
 			d.Connections = 0
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + d.Filename))
+			m.addLogEntry(LogStyleError.Render(errorLogLine(d.Filename, msg.Err)))
 			found = true
 		}
 		if !found {
@@ -272,7 +289,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload.done = false
 			newDownload.started = false
 			m.downloads = append(m.downloads, newDownload)
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + msg.Filename))
+			m.addLogEntry(LogStyleError.Render(errorLogLine(msg.Filename, msg.Err)))
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		m.UpdateListItems()
@@ -345,4 +362,14 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	}
 
 	return m, nil
+}
+
+// errorLogLine renders a failed download in the log with its cause, so a
+// verification failure (for example a checksum mismatch) is readable without
+// opening the row detail.
+func errorLogLine(filename string, err error) string {
+	if err == nil {
+		return "\u2716 Error: " + filename
+	}
+	return "\u2716 Error: " + filename + ": " + err.Error()
 }

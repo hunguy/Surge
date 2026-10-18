@@ -32,6 +32,9 @@ type httpAPITestService struct {
 	clearFailedReturns    int64
 	clearCompletedErr     error
 	clearFailedErr        error
+	restartedID           string
+	restartNewID          string
+	restartErr            error
 }
 
 func newRateLimitTestService() *httpAPITestService {
@@ -70,6 +73,17 @@ func (s *httpAPITestService) Resume(string) error {
 
 func (s *httpAPITestService) ResumeBatch([]string) []error {
 	return nil
+}
+
+func (s *httpAPITestService) Restart(id string) (string, error) {
+	s.restartedID = id
+	if s.restartErr != nil {
+		return "", s.restartErr
+	}
+	if s.restartNewID != "" {
+		return s.restartNewID, nil
+	}
+	return "new-" + id, nil
 }
 
 func (s *httpAPITestService) UpdateURL(string, string) error {
@@ -852,6 +866,7 @@ func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[strin
 func (r *rateLimitWrapper) Pause(string) error                              { return nil }
 func (r *rateLimitWrapper) Resume(string) error                             { return nil }
 func (r *rateLimitWrapper) ResumeBatch([]string) []error                    { return nil }
+func (r *rateLimitWrapper) Restart(string) (string, error)                  { return "", nil }
 func (r *rateLimitWrapper) UpdateURL(string, string) error                  { return nil }
 func (r *rateLimitWrapper) Delete(string) error                             { return nil }
 func (r *rateLimitWrapper) Purge(string) error                              { return nil }
@@ -1007,6 +1022,49 @@ func TestClearFailedEndpoint(t *testing.T) {
 				if !strings.Contains(rec.Body.String(), tt.wantResponse) {
 					t.Fatalf("expected response to contain %q, got %q", tt.wantResponse, rec.Body.String())
 				}
+			}
+		})
+	}
+}
+
+func TestRestartEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		method   string
+		path     string
+		wantCode int
+		wantID   string
+	}{
+		{name: "restarts and returns the new id", method: http.MethodPost, path: "/restart?id=dl-1", wantCode: http.StatusOK, wantID: "new-dl-1"},
+		{name: "missing id is a bad request", method: http.MethodPost, path: "/restart", wantCode: http.StatusBadRequest},
+		{name: "wrong method is rejected", method: http.MethodGet, path: "/restart?id=dl-1", wantCode: http.StatusMethodNotAllowed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &httpAPITestService{}
+			mux := http.NewServeMux()
+			registerHTTPRoutes(mux, 0, "", svc)
+
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (body %q)", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if tc.wantID == "" {
+				if svc.restartedID != "" {
+					t.Fatalf("restart service called with %q for a rejected request", svc.restartedID)
+				}
+				return
+			}
+			if svc.restartedID != "dl-1" {
+				t.Fatalf("restart service called with %q, want dl-1", svc.restartedID)
+			}
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if body["id"] != tc.wantID {
+				t.Fatalf("response id = %q, want %q", body["id"], tc.wantID)
 			}
 		})
 	}

@@ -333,6 +333,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(m.viewRestartConfirm()))
 	}
 
+	if m.state == RestartDownloadConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewRestartDownloadConfirm()))
+	}
+
 	if m.state == PurgeConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewPurgeConfirm()))
 	}
@@ -920,6 +924,47 @@ func (m RootModel) viewRestartConfirm() string {
 		YesLabel:         "Yes",
 		NoLabel:          "No",
 	}
+	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+}
+
+func (m RootModel) viewRestartDownloadConfirm() string {
+	filename := ""
+	if d := m.FindDownloadByID(m.restartTargetID); d != nil {
+		filename = d.Filename
+		if filename == "" || filename == "Queued" {
+			filename = d.URL
+		}
+	}
+
+	if filename == "" {
+		filename = "this download"
+	} else {
+		filename = utils.Truncate(filename, 30)
+	}
+
+	filenameStyled := lipgloss.NewStyle().Foreground(colors.White()).Bold(true).Render(filename)
+	detailStyle := lipgloss.NewStyle().Foreground(colors.Magenta()).Bold(true)
+	warnStyle := lipgloss.NewStyle().Foreground(colors.Red()).Bold(true)
+	detailStr := detailStyle.Render("File: ") + filenameStyled + "\n" + warnStyle.Render("All progress will be wiped and it will download again from 0.")
+
+	modal := components.ConfirmationModal{
+		Title:            "Restart Download",
+		Message:          "Restart this download from the beginning?",
+		Detail:           detailStr,
+		Keys:             m.keys.QuitConfirm, // QuitConfirm works as a general yes/no
+		Help:             m.help,
+		BorderColor:      colors.Orange(),
+		ButtonColor:      colors.Orange(),
+		ShowYesNoButtons: true,
+		YesNoFocused:     m.quitConfirmFocused,
+		YesLabel:         "Restart",
+		NoLabel:          "Cancel",
+	}
+
+	w, h := GetDynamicModalDimensions(m.width, m.height, 46, 8, 70, 12)
+	modal.Width = w
+	modal.Height = h
+
 	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }
 

@@ -256,6 +256,24 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Restart download from zero
+	if key.Matches(msg, m.keys.Dashboard.Restart) {
+		if d := m.GetSelectedDownload(); d != nil {
+			if m.Service == nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+				return m, nil
+			}
+			if d.done && d.err == nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Restart is only for unfinished downloads"))
+				return m, nil
+			}
+			m.restartTargetID = d.ID
+			m.quitConfirmFocused = 1 // default focus on "Cancel"
+			m.state = RestartDownloadConfirmState
+		}
+		return m, nil
+	}
+
 	// Refresh URL
 	if key.Matches(msg, m.keys.Dashboard.Refresh) {
 		if d := m.GetSelectedDownload(); d != nil {

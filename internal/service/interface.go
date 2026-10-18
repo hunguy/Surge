@@ -31,6 +31,10 @@ type DownloadService interface {
 	// ResumeBatch resumes multiple paused downloads efficiently.
 	ResumeBatch(ids []string) []error
 
+	// Restart discards a download's progress and queues it again from zero,
+	// returning the ID of the new download.
+	Restart(id string) (string, error)
+
 	// UpdateURL updates the URL of a paused or errored download
 	UpdateURL(id string, newURL string) error
 
