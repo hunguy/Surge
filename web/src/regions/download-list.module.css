@@ -1,0 +1,9 @@
+.region {
+  display: grid;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-4);
+}

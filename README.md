@@ -11,7 +11,7 @@
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-violet.svg)](https://www.buymeacoffee.com/surge.downloader)
 [![Stars](https://img.shields.io/github/stars/SurgeDM/Surge?style=social)](https://github.com/SurgeDM/Surge/stargazers)
 
-[Documentation](docs/README.md) • [Installation](#installation) • [Usage](#usage) • [Themes](docs/guides/customize-surge.md) • [Fonts](docs/guides/customize-surge.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/reference/cli.md)
+[Documentation](docs/README.md) • [Installation](#installation) • [Usage](#usage) • [Themes](docs/guides/customize-surge.md) • [Fonts](docs/guides/customize-surge.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Web UI](#web-ui) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/reference/cli.md)
 
 </div>
 
@@ -19,7 +19,7 @@
 
 ## What is Surge?
 
-Surge is designed for power users who prefer a keyboard-driven workflow. It features a beautiful **Terminal User Interface (TUI)**, as well as a background **Headless Server** and a **CLI tool** for automation.
+Surge is designed for power users who prefer a keyboard-driven workflow. It features a beautiful **Terminal User Interface (TUI)**, a background **Headless Server**, a **CLI tool** for automation, and a **Web UI** for managing downloads from any browser.
 
 ![Surge Demo](assets/demo.gif)
 
@@ -34,6 +34,7 @@ Most browsers open a single connection for a download. Surge opens multiple (up 
 - **Sequential Download:** Option to download files in strict order (Streaming Mode). Ideal for media files that you want to preview while downloading.
 - **Daemon Architecture:** Surge runs a single background "engine." You can open 10 different terminal tabs and queue downloads; they all funnel into one efficient manager.
 - **Beautiful TUI:** Built with Bubble Tea & Lipgloss, featuring customizable palettes and full theme engine support.
+- **Web UI:** A browser client that talks to the same daemon, so you can manage downloads from your phone, a tablet, or any machine on your network.
 
 For a deep dive into how we make downloads faster (like work stealing and slow worker handling), check out our **[Optimization Guide](docs/OPTIMIZATIONS.md)**.
 
@@ -68,6 +69,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | **Nix / NixOS**              | `nix run github:SurgeDM/Surge`                                        | Via Nix flake. NixOS config: `inputs.surge.packages.${pkgs.system}.default` |
 | **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge`<br />or<br />`choco install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
+| **Web UI (Docker)**          | [See instructions](#web-ui)                                                          | Browser client for the daemon, on port 1777 |
 | **Go Install**               | `go install github.com/SurgeDM/Surge@latest`                          | Requires Go 1.25+                           |
 
 ---
@@ -273,6 +275,91 @@ View logs:
 ```bash
 docker compose logs -f surge
 ```
+
+---
+
+## Web UI
+
+Surge ships a browser client for the same daemon the TUI and CLI talk to. Queue,
+pause, resume, and remove downloads from a phone, a tablet, or any machine on
+your network, with live progress over server-sent events.
+
+The Web UI is a separate component: it is a static Vite/React app that talks to a
+`surge server` over HTTP, so it needs a daemon to be useful. Deploy the daemon
+first with the [Docker Compose section](#5-server-mode-with-docker-compose) above
+(or any other method), then deploy the UI.
+
+### Deploy with Docker
+
+The repository root has a `docker-compose.yaml` that builds and serves the Web UI.
+It publishes on port **1777** by default:
+
+```bash
+git clone https://github.com/SurgeDM/Surge.git
+cd Surge
+docker compose up -d --build
+```
+
+Open `http://localhost:1777`, then open **Server settings** (the gear icon in the
+header) and enter your daemon's URL and token. The token comes from
+`surge token`, or from the TUI under **Settings → Extension**; see
+[Remote TUI](#4-remote-tui).
+
+To publish on a different port, copy the sample environment file and edit it:
+
+```bash
+cp .env.example .env
+# SURGE_WEB_PORT=8080
+docker compose up -d
+```
+
+> [!IMPORTANT]
+> The compose file sets the **host** port from `SURGE_WEB_PORT` and leaves the
+> container's internal port at 1777. Changing the host port is enough — do not
+> also change the container side, or the published port stops reaching nginx.
+
+### Pointing the UI at your daemon
+
+Because the browser makes the request, the URL you enter must be reachable from
+the **browser**, not from the container serving the UI. Two consequences:
+
+- A daemon running on the same host as the container is **not** at
+  `http://127.0.0.1:1700` — inside a container that address is the container
+  itself. Use the host's LAN IP (`http://192.168.1.10:1700`), or
+  `http://host.docker.internal:1700` on Docker Desktop and OrbStack.
+- To reach the UI from another device, the daemon must be reachable too. Surge
+  binds `0.0.0.0` by default, so the LAN IP works as long as your firewall
+  allows port 1700.
+
+The connection is stored in that browser's local storage, per device.
+
+### Run it locally for development
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # type check plus production build
+npm run test     # node:test, no test dependencies
+npm run lint     # oxlint
+```
+
+The Docker image builds the app with `npm run build` and serves the result from
+nginx on an `nginx:alpine-slim` base. See [`web/README.md`](web/README.md) for
+the layout, the endpoints the UI calls, and how it talks to the daemon.
+
+### The version stamp
+
+The UI prints its own version in the bottom-right corner of the page, read from
+`web/package.json` at build time. `scripts/hooks/pre-commit` raises that version on
+every commit and stages the bump, so a deployed build can be named out loud:
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+That is one-time per clone. A relative `core.hooksPath` resolves against `.git`, not
+the working tree, so the value has to be relative to the repository root as written.
 
 ---
 

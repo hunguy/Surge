@@ -3,6 +3,7 @@ surge
 *.surge
 Surge
 Surge.exe
+surge_version.exe
 surge_bin
 *.trace
 
@@ -21,6 +22,12 @@ worker_speeds.png
 dist/
 build/
 .goreleaser-extra/
+
+# local editor + agent tooling
+.DS_Store
+.claude/
+.cursor/
+.serena/
 
 # secrets
 .github_token

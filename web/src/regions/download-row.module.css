@@ -1,0 +1,155 @@
+.row {
+  display: grid;
+  /* An auto track floors at the widest child's min-content, and a nowrap filename's min-content is the whole name,
+     which would drag the status pill off the row. A fixed track keeps every child inside the content box. */
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+}
+
+.head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Size and status travel together on the right, keeping their width while the name absorbs what gives. */
+.chips {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The name takes what is left and never pushes the status off the row; the pill keeps its intrinsic width.
+   At 80% the name has a column of its own, so its box can end before the text does. */
+.filename {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 80%;
+  margin: 0;
+  overflow: hidden;
+  /* The heading sets the size, not just its child. The h3's own font decides the line
+     box the row is measured on: left at the UA default (18.72px) a marquee line stood
+     4px taller and sat 3px lower than a still one. */
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-body);
+}
+
+.filenameText {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Off-flow copy used only to measure the full name. Height is zero so it cannot change the row. */
+.filenameText.probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  height: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Two copies travel by one name plus the gap, so the loop lands on the same pixels it started from.
+   Block-level, not inline-flex: an inline-level track sits on the baseline and adds a pixel the
+   still rows do not have, so a scrolling name would ride low against its neighbours. */
+.marquee {
+  display: flex;
+  width: max-content;
+  gap: var(--space-8);
+  animation: filename-marquee var(--marquee-duration) linear infinite;
+}
+
+.marquee .filenameText {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+@keyframes filename-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc((var(--marquee-distance) + var(--space-8)) * -1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    display: block;
+    width: auto;
+    animation: none;
+  }
+
+  .marquee .filenameText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+  }
+
+  .marquee .filenameText + .filenameText {
+    display: none;
+  }
+}
+
+/* The host names the source and takes the left edge; the save path takes the right and aligns to the inner edge. */
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.path {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.host {
+  min-width: 0;
+  flex: none;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Elapsed on the left, time remaining on the right, neither labelled. */
+.times {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The only Arc-internal override: the running speed reads as a green status while it sits in the progress label.
+   Scoped to the progress bar so the status badge beside the filename keeps its tone. */
+.row :global([role="progressbar"] [class*="_label_"]) {
+  color: var(--success);
+}

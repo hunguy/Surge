@@ -16,6 +16,7 @@ want to do.
 - [Use the interactive TUI](guides/use-the-tui.md)
 - [Run Surge as a service](guides/run-as-a-service.md)
 - [Connect to a remote server](guides/connect-to-a-remote-server.md)
+- [Manage downloads from the Web UI](../README.md#web-ui)
 - [Customize themes, fonts, and keybindings](guides/customize-surge.md)
 
 ## Configure and automate

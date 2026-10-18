@@ -218,6 +218,53 @@ func withDarwinRootHint(s service.Service, action string, err error) error {
 	return err
 }
 
+// runLaunchctl invokes launchctl and returns its combined output. It is a
+// variable so tests can substitute a stub.
+var runLaunchctl = func(args ...string) (string, error) {
+	out, err := exec.Command("launchctl", args...).CombinedOutput()
+	return string(out), err
+}
+
+// darwinServiceRunning reports whether launchd currently has the Surge daemon
+// loaded and running. It asks `launchctl print` rather than going through
+// kardianos because launchd only reports the system daemon's PID to an
+// unprivileged caller through the modern print view; the legacy
+// `launchctl list` view kardianos parses reports the same daemon as stopped.
+//
+// This matters for `service start`: macOS loads every plist in
+// /Library/LaunchDaemons at boot and a KeepAlive daemon stays up, so a repeated
+// start would otherwise reach `launchctl load`, which rejects an already-loaded
+// unit with a cryptic "Load failed: 5: Input/output error".
+func darwinServiceRunning(s service.Service) bool {
+	if s.Platform() != darwinLaunchdPlatform {
+		return false
+	}
+	out, err := runLaunchctl("print", "system/"+serviceConfig.Name)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, "state = running")
+}
+
+// explainDarwinLoadFailed explains launchctl's generic "Load failed: 5:
+// Input/output error". launchd returns that same error both for a plist it
+// cannot process and for a unit it has already loaded, and its own suggestion
+// ("try running launchctl bootstrap as root") misdirects users who are already
+// root. It returns "" when the hint does not apply.
+func explainDarwinLoadFailed(s service.Service, err error) string {
+	if s.Platform() != darwinLaunchdPlatform || err == nil {
+		return ""
+	}
+	if !strings.Contains(err.Error(), "Input/output error") {
+		return ""
+	}
+	return fmt.Sprintf(
+		"launchd rejected the unit with its generic 'Input/output error', which it also reports when the unit "+
+			"is already loaded; check 'surge service status' first, then refresh the unit with 'sudo %s service "+
+			"uninstall' followed by 'sudo %s service install'",
+		executablePath(), executablePath())
+}
+
 // runSystemctl invokes systemctl and returns its combined output. It is a
 // variable so tests can substitute a stub. Calling systemctl directly (rather
 // than through kardianos) preserves stderr, so a failed action surfaces
@@ -241,7 +288,19 @@ func runServiceAction(s service.Service, action string) error {
 	if s.Platform() != linuxSystemdPlatform {
 		switch action {
 		case "start":
-			return withDarwinRootHint(s, action, s.Start())
+			err := s.Start()
+			if err == nil {
+				return nil
+			}
+			// The root-privileges hint is the actionable fix when the process is
+			// unprivileged, so it takes precedence over the launchd-specific one.
+			if hint := explainDarwinRootRequired(s, action); hint != "" {
+				return fmt.Errorf("%s: %w", hint, err)
+			}
+			if hint := explainDarwinLoadFailed(s, err); hint != "" {
+				return fmt.Errorf("%s: %w", hint, err)
+			}
+			return err
 		case "stop":
 			return withDarwinRootHint(s, action, s.Stop())
 		default:
@@ -500,6 +559,12 @@ var serviceStartCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// An already-running daemon needs no work (and, on macOS, no elevation).
+		// Short-circuit before launchctl so the redundant load does not fail.
+		if darwinServiceRunning(s) {
+			fmt.Println("Service is already running")
+			return nil
+		}
 		if err := runServiceAction(s, "start"); err != nil {
 			return err
 		}
@@ -541,6 +606,9 @@ func isSystemServiceRunning() bool {
 	if err != nil {
 		return false
 	}
+	if darwinServiceRunning(s) {
+		return true
+	}
 	status, err := s.Status()
 	return err == nil && status == service.StatusRunning
 }
@@ -550,6 +618,13 @@ var serviceStatusCmd = &cobra.Command{
 	Short: "Check the status of the Surge system service",
 	RunE: runAction(func(s service.Service) error {
 		status, err := s.Status()
+		// launchd answers `launchctl print` truthfully for both privileged and
+		// unprivileged callers, while kardianos' legacy `launchctl list` view
+		// reports the system daemon as stopped to a non-root user. Trust launchd
+		// when it says the daemon is up.
+		if darwinServiceRunning(s) {
+			status, err = service.StatusRunning, nil
+		}
 		if err != nil {
 			// systemd surfaces a failed unit as a Status error rather than a
 			// state; turn it into a readable diagnosis instead of the raw error.
