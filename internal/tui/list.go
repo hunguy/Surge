@@ -36,7 +36,7 @@ func (i DownloadItem) Description() string {
 	var styledStatus string
 	if d.pausing {
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(i.spinnerView + " Pausing...")
-	} else if d.resuming {
+	} else if d.resuming && d.started && !d.paused {
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
 	} else {
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
@@ -288,14 +288,7 @@ func (m *RootModel) UpdateListItems() {
 			// Find the download globally
 			for _, d := range m.downloads {
 				if d.ID == targetID {
-					var newTab int
-					if d.done {
-						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
-						newTab = TabActive
-					} else {
-						newTab = TabQueued
-					}
+					newTab := downloadTab(d)
 
 					// If it belongs to a different tab, switch to it (unless current tab is pinned)
 					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {

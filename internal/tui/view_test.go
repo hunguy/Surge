@@ -102,9 +102,17 @@ func TestGetDownloadStatus(t *testing.T) {
 		{
 			name: "Resuming State",
 			model: &DownloadModel{
+				started:  true,
 				resuming: true,
 			},
 			expected: "⠋ Resuming...",
+		},
+		{
+			name: "Resuming Waiting For Slot",
+			model: &DownloadModel{
+				resuming: true,
+			},
+			expected: "⠋ Queued",
 		},
 		{
 			name: "Queued State",

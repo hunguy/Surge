@@ -134,7 +134,7 @@ func DetermineStatus(done bool, paused bool, hasError bool, started bool, resumi
 		return StatusComplete
 	case paused && !resuming:
 		return StatusPaused
-	case !started || resuming:
+	case !started || paused:
 		return StatusQueued
 	default:
 		return StatusDownloading

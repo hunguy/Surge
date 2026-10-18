@@ -185,6 +185,10 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if d.paused || d.err != nil {
+				if limit, reached := m.activeLimitReached(); reached {
+					m.addActiveLimitWarning(limit)
+					return m, nil
+				}
 				// Resume paused and errored downloads; keep their state on failure.
 				if err := m.Service.Resume(d.ID); err != nil {
 					m.addLogEntry(LogStyleError.Render("\u2716 Resume failed: " + err.Error()))
@@ -193,7 +197,10 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					d.err = nil
 					d.paused = false
 					d.pausing = false
+					d.started = false
 					d.resuming = true
+					d.Speed = 0
+					d.Connections = 0
 					m.UpdateListItems()
 					return m, m.spinner.Tick
 				}
@@ -266,6 +273,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if d.done && d.err == nil {
 				m.addLogEntry(LogStyleError.Render("\u2716 Restart is only for unfinished downloads"))
 				return m, nil
+			}
+			// Restarting an active download cancels it first and frees its slot.
+			// Restarting a queued/paused/errored item would need a new slot.
+			if (!d.started || d.paused) && !d.pausing {
+				if limit, reached := m.activeLimitReached(); reached {
+					m.addActiveLimitWarning(limit)
+					return m, nil
+				}
 			}
 			m.restartTargetID = d.ID
 			m.quitConfirmFocused = 1 // default focus on "Cancel"

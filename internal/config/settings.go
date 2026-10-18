@@ -345,8 +345,13 @@ func (s *Settings) FindSettingsCategory(name string) *SettingsCategory {
 	return nil
 }
 
-// GetSettingsPath returns the path to the settings TOML file.
+// GetSettingsPath returns the path to the settings TOML file. A root system
+// service reads and writes the primary desktop user's settings so the daemon
+// honors every setting the user configured, not just the download directory.
 func GetSettingsPath() string {
+	if path := primaryUserSettingsPath(); path != "" {
+		return path
+	}
 	return filepath.Join(GetSurgeDir(), "settings.toml")
 }
 
@@ -700,8 +705,8 @@ func DefaultSettings() *Settings {
 			},
 			MaxConcurrentDownloads: &Setting{
 				Key:          "max_concurrent_downloads",
-				Label:        "Max Concurrent Downloads",
-				Description:  "Maximum number of downloads running at once (1-10).",
+				Label:        "Max Active Downloads",
+				Description:  "Maximum number of downloads that can be active at once (1-10). Extra downloads wait in the Queue tab. Requires restart.",
 				Type:         TypeInt,
 				NeedsRestart: true,
 				DefaultValue: 3,
@@ -1209,6 +1214,7 @@ func writeTOMLAtomic(path string, v any) error {
 		_ = os.Remove(tempPath)
 		return err
 	}
+	preserveFileMetadata(tempPath, path)
 	return os.Rename(tempPath, path)
 }
 

@@ -105,13 +105,13 @@ func TestDetermineStatus(t *testing.T) {
 			expected: StatusDownloading,
 		},
 		{
-			name:     "Started but resuming is queued",
+			name:     "Started and resuming is downloading",
 			done:     false,
 			paused:   false,
 			hasError: false,
 			started:  true,
 			resuming: true,
-			expected: StatusQueued,
+			expected: StatusDownloading,
 		},
 	}
 

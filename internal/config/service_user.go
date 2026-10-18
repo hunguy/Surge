@@ -18,6 +18,37 @@ var (
 	geteuidFn         = os.Geteuid
 )
 
+// systemServiceSettingsEnv marks a root system-service process. Unlike a
+// manually launched root server, the service has no interactive session of its
+// own and must resolve settings from the desktop user who configured Surge.
+const systemServiceSettingsEnv = "SURGE_SYSTEM_SERVICE_SETTINGS"
+
+// EnableSystemServiceSettings makes a root system service resolve settings from
+// the primary desktop user's settings.toml instead of root's own file. The
+// service entry point calls this before cobra loads settings.
+func EnableSystemServiceSettings() {
+	_ = os.Setenv(systemServiceSettingsEnv, "1")
+}
+
+// primaryUserSettingsPath returns the primary desktop user's settings.toml when
+// this process is a root system service and the user has one. It returns "" so
+// callers keep the process-scoped settings path for other modes.
+func primaryUserSettingsPath() string {
+	if strings.TrimSpace(os.Getenv(systemServiceSettingsEnv)) != "1" {
+		return ""
+	}
+	home := PrimaryUserHome()
+	if home == "" {
+		return ""
+	}
+	for _, path := range userSettingsTomlCandidates(home) {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path
+		}
+	}
+	return ""
+}
+
 // PrimaryUserHome returns the home directory of the primary interactive desktop
 // user when this process is the root system service, or "" otherwise.
 //

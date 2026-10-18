@@ -448,6 +448,16 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// A service manager may invoke `server start --is-system-service`
+		// directly (for example, the NixOS module). Mark service mode before
+		// loading settings so the daemon reads the desktop user's file.
+		if flag := cmd.Flags().Lookup("is-system-service"); flag != nil {
+			if enabled, err := cmd.Flags().GetBool("is-system-service"); err == nil && enabled {
+				config.EnableSystemServiceSettings()
+				globalSettings = nil
+			}
+		}
+
 		if reset, _ := cmd.Flags().GetBool("reset-settings"); reset {
 			err1 := utils.RemoveFile(config.GetSettingsPath())
 			err2 := utils.RemoveFile(config.GetKeyMapConfigPath())

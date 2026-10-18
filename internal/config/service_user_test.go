@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -173,6 +175,109 @@ func TestUserSettingsTomlCandidates(t *testing.T) {
 
 	if candidates := userSettingsTomlCandidates("  "); candidates != nil {
 		t.Fatalf("userSettingsTomlCandidates(blank) = %v, want nil", candidates)
+	}
+}
+
+func TestSystemServiceLoadsAllPrimaryUserSettings(t *testing.T) {
+	forceRootEuid(t)
+	home := t.TempDir()
+	orig := primaryUserHomeFn
+	primaryUserHomeFn = func() string { return home }
+	t.Cleanup(func() { primaryUserHomeFn = orig })
+	t.Setenv(systemServiceSettingsEnv, "1")
+
+	userPath := filepath.Join(home, ".config", "surge", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(userPath), 0o755); err != nil {
+		t.Fatalf("mkdir user settings dir: %v", err)
+	}
+	body := `[network]
+max_concurrent_downloads = 1
+max_concurrent_probes = 1
+max_connections_per_host = 4
+
+[general]
+default_download_dir = '/home/tester/Downloads'
+
+[performance]
+max_task_retries = 7
+`
+	if err := os.WriteFile(userPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write user settings: %v", err)
+	}
+
+	if got := GetSettingsPath(); got != userPath {
+		t.Fatalf("GetSettingsPath() = %q, want user settings %q", got, userPath)
+	}
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings() error: %v", err)
+	}
+	if got := Resolve[int](settings.Network.MaxConcurrentDownloads); got != 1 {
+		t.Errorf("max_concurrent_downloads = %d, want 1", got)
+	}
+	if got := Resolve[int](settings.Network.MaxConcurrentProbes); got != 1 {
+		t.Errorf("max_concurrent_probes = %d, want 1", got)
+	}
+	if got := Resolve[int](settings.Network.MaxConnectionsPerDownload); got != 4 {
+		t.Errorf("max_connections_per_host = %d, want 4", got)
+	}
+	if got := Resolve[int](settings.Performance.MaxTaskRetries); got != 7 {
+		t.Errorf("max_task_retries = %d, want 7", got)
+	}
+}
+
+func TestSystemServiceSavesToPrimaryUserSettings(t *testing.T) {
+	forceRootEuid(t)
+	home := t.TempDir()
+	orig := primaryUserHomeFn
+	primaryUserHomeFn = func() string { return home }
+	t.Cleanup(func() { primaryUserHomeFn = orig })
+	t.Setenv(systemServiceSettingsEnv, "1")
+
+	userPath := filepath.Join(home, ".config", "surge", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(userPath), 0o755); err != nil {
+		t.Fatalf("mkdir user settings dir: %v", err)
+	}
+	if err := os.WriteFile(userPath, []byte("[network]\nmax_concurrent_downloads = 1\n"), 0o640); err != nil {
+		t.Fatalf("write user settings: %v", err)
+	}
+
+	settings, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings() error: %v", err)
+	}
+	settings.Network.MaxConcurrentDownloads.Value = 2
+	if err := SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings() error: %v", err)
+	}
+
+	if info, err := os.Stat(userPath); err == nil && runtime.GOOS != "windows" {
+		if got := info.Mode().Perm(); got != 0o640 {
+			t.Errorf("settings mode = %o, want 640 after root service save", got)
+		}
+	}
+
+	// Ensure the root service writes the user's file, not root's own config.
+	data, err := os.ReadFile(userPath)
+	if err != nil {
+		t.Fatalf("read user settings after save: %v", err)
+	}
+	if !strings.Contains(string(data), "max_concurrent_downloads = 2") {
+		t.Fatalf("user settings did not receive the save:\n%s", data)
+	}
+}
+
+func TestRootWithoutServiceModeKeepsProcessSettingsPath(t *testing.T) {
+	forceRootEuid(t)
+	home := t.TempDir()
+	orig := primaryUserHomeFn
+	primaryUserHomeFn = func() string { return home }
+	t.Cleanup(func() { primaryUserHomeFn = orig })
+	t.Setenv(systemServiceSettingsEnv, "")
+
+	if got, want := GetSettingsPath(), filepath.Join(GetSurgeDir(), "settings.toml"); got != want {
+		t.Fatalf("GetSettingsPath() = %q, want process settings %q", got, want)
 	}
 }
 

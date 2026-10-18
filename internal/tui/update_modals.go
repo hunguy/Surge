@@ -572,6 +572,13 @@ func (m RootModel) updateRestartDownloadConfirm(msg tea.KeyPressMsg) (tea.Model,
 		filename := ""
 		if d := m.FindDownloadByID(targetID); d != nil {
 			filename = d.Filename
+			// The limit can be reached while the confirmation modal is open.
+			if (!d.started || d.paused) && !d.pausing {
+				if limit, reached := m.activeLimitReached(); reached {
+					m.addActiveLimitWarning(limit)
+					return m, nil
+				}
+			}
 		}
 
 		return m, func() tea.Msg {

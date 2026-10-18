@@ -35,9 +35,17 @@ func TestDownloadItem_Description(t *testing.T) {
 		{
 			name: "Resuming State",
 			model: &DownloadModel{
+				started:  true,
 				resuming: true,
 			},
 			expected: "\u280b Resuming...",
+		},
+		{
+			name: "Resuming Waiting For Slot",
+			model: &DownloadModel{
+				resuming: true,
+			},
+			expected: "\u280b Queued",
 		},
 		{
 			name: "Queued State",

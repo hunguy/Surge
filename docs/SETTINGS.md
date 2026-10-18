@@ -124,7 +124,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | Key                        | Type   | Description                                                                                           | Default |
 | :------------------------- | :----- | :---------------------------------------------------------------------------------------------------- | :------ |
 | `max_connections_per_host` | int    | Maximum concurrent connections per download (1-64). High values may trigger server rate limits. | `16`    |
-| `max_concurrent_downloads` | int    | Maximum number of downloads running simultaneously (requires restart).                                | `3`     |
+| `max_concurrent_downloads` | int    | Maximum number of downloads active at once; additional downloads wait in the Queue tab (requires restart). | `3`     |
 | `global_rate_limit`        | string | Global speed limit across all downloads (e.g. `10 MB/s`, `0` or `∞` for unlimited).                   | `0`     |
 | `default_download_rate_limit` | string | Default speed limit applied to new downloads (e.g. `5 MB/s`, `0` or `∞` for unlimited).            | `0`     |
 | `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10). Requires restart. | `3`     |

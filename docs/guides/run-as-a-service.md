@@ -18,6 +18,11 @@ surge service start
 surge service status
 ```
 
+The service reads the desktop user's `settings.toml`, so the same
+`surge config` values (including network concurrency limits) apply to the
+daemon. Settings that require a restart take effect after restarting the
+service.
+
 The service has its own authentication token. Retrieve it when connecting a
 remote TUI or configuring the browser extension:
 

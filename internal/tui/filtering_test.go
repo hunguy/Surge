@@ -29,12 +29,20 @@ func TestTabFiltering(t *testing.T) {
 			expectedCount: 1,
 		},
 		{
-			name:      "Active Tab shows resuming downloads",
+			name:      "Active Tab shows started resuming downloads",
+			activeTab: TabActive,
+			downloads: []*DownloadModel{
+				{ID: "1", Speed: 0, done: false, paused: false, started: true, resuming: true},
+			},
+			expectedCount: 1,
+		},
+		{
+			name:      "Active Tab excludes resuming downloads waiting for a slot",
 			activeTab: TabActive,
 			downloads: []*DownloadModel{
 				{ID: "1", Speed: 0, done: false, paused: false, resuming: true},
 			},
-			expectedCount: 1,
+			expectedCount: 0,
 		},
 		{
 			name:      "Active Tab excludes paused even with speed",
@@ -57,6 +65,14 @@ func TestTabFiltering(t *testing.T) {
 			activeTab: TabQueued,
 			downloads: []*DownloadModel{
 				{ID: "1", Speed: 0, Connections: 0, done: false, paused: false},
+			},
+			expectedCount: 1,
+		},
+		{
+			name:      "Queued Tab includes resuming downloads waiting for a slot",
+			activeTab: TabQueued,
+			downloads: []*DownloadModel{
+				{ID: "1", Speed: 0, done: false, paused: false, resuming: true},
 			},
 			expectedCount: 1,
 		},
@@ -113,7 +129,7 @@ func TestComputeViewStatsConsistency(t *testing.T) {
 	downloads := []*DownloadModel{
 		{ID: "active-speed", Speed: 1024, done: false, paused: false},
 		{ID: "active-conns", Speed: 0, Connections: 1, done: false, paused: false},
-		{ID: "active-resuming", Speed: 0, done: false, paused: false, resuming: true},
+		{ID: "resuming-waiting", Speed: 0, done: false, paused: false, resuming: true},
 		{ID: "paused", Speed: 0, done: false, paused: true},
 		{ID: "pausing", Speed: 1024, done: false, pausing: true},
 		{ID: "queued", Speed: 0, Connections: 0, done: false},

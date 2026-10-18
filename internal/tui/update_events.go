@@ -72,7 +72,10 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.err = nil
 			d.paused = false
 			d.pausing = false
+			d.started = false
 			d.resuming = true
+			d.Speed = 0
+			d.Connections = 0
 		}
 		return m, m.spinner.Tick
 
@@ -300,10 +303,12 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.paused = true
 			d.pausing = false
 			d.resuming = false
+			d.started = false
 			d.Downloaded = msg.Downloaded
 			d.RateLimit = msg.RateLimit
 			d.RateLimitSet = msg.RateLimitSet
 			d.Speed = 0
+			d.Connections = 0
 			m.addLogEntry(LogStylePaused.Render("\u23f8 Paused: " + d.Filename))
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -316,7 +321,12 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.err = nil
 			d.paused = false
 			d.pausing = false
+			// The daemon queues the resumed download and only emits EventStarted
+			// once a scheduler slot is free.
+			d.started = false
 			d.resuming = true
+			d.Speed = 0
+			d.Connections = 0
 			d.hasEtaSpeed = false
 			d.etaSpeed = 0
 			d.lastETA = 0

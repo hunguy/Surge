@@ -654,6 +654,65 @@ func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 	return nil
 }
 
+// downloadTab reports which dashboard tab owns a download. It mirrors the
+// scheduler's view of the item: a download that has not been confirmed started
+// by the engine is queued, even while a resume request is in flight.
+func downloadTab(d *DownloadModel) int {
+	if d == nil {
+		return TabQueued
+	}
+	if d.done {
+		return TabDone
+	}
+	if d.pausing || d.err != nil {
+		return TabQueued
+	}
+	// A live speed or connection count is authoritative even if the started
+	// flag has not caught up yet. Paused downloads are excluded above.
+	if !d.paused && (d.started || d.Speed > 0 || d.Connections > 0) {
+		return TabActive
+	}
+	return TabQueued
+}
+
+// maxActiveDownloads returns the configured Active-tab limit. A non-positive
+// value means no local limit is available (for example, a test model).
+func (m RootModel) maxActiveDownloads() int {
+	if m.Settings == nil || m.Settings.Network.MaxConcurrentDownloads == nil {
+		return 0
+	}
+	return config.Resolve[int](m.Settings.Network.MaxConcurrentDownloads)
+}
+
+// activeDownloadCount returns the number of downloads the engine has actually
+// started. Downloads waiting for a scheduler slot are not counted.
+func (m RootModel) activeDownloadCount() int {
+	count := 0
+	for _, d := range m.downloads {
+		if downloadTab(d) == TabActive {
+			count++
+		}
+	}
+	return count
+}
+
+// activeLimitReached reports whether another download can be started. The
+// configured limit may be stale until the daemon is restarted, but the TUI
+// uses it only to warn about user-initiated actions; the scheduler remains the
+// source of truth for actual concurrency.
+func (m RootModel) activeLimitReached() (int, bool) {
+	limit := m.maxActiveDownloads()
+	if limit <= 0 {
+		return limit, false
+	}
+	return limit, m.activeDownloadCount() >= limit
+}
+
+func (m *RootModel) addActiveLimitWarning(limit int) {
+	m.addLogEntry(LogStyleError.Render(fmt.Sprintf(
+		"\u26a0 Max active downloads reached (%d). Wait for an active download to finish, then try again.", limit)))
+}
+
 // Helper to get downloads for the current tab
 func (m RootModel) getFilteredDownloads() []*DownloadModel {
 	var filtered []*DownloadModel
@@ -661,21 +720,8 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 
 	for _, d := range m.downloads {
 		// Apply tab filter first
-		switch m.activeTab {
-		case TabQueued:
-			// Queued includes paused downloads and anything not currently active or done
-			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started)) {
-				continue
-			}
-		case TabActive:
-			// Active excludes paused downloads and anything without current activity
-			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming && !d.started) {
-				continue
-			}
-		case TabDone:
-			if !d.done {
-				continue
-			}
+		if downloadTab(d) != m.activeTab {
+			continue
 		}
 
 		// Apply dashboard category filter.

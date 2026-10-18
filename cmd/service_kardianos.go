@@ -31,6 +31,14 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
+	// A root system service must honor the desktop user's settings.toml. Mark
+	// service mode before cobra loads settings in PersistentPreRun.
+	config.EnableSystemServiceSettings()
+	// The outer `service __run` execution already loaded the process-scoped
+	// settings and populated this cache. Drop it so the nested `server start`
+	// reloads from the desktop user's settings instead of reusing root's.
+	globalSettings = nil
+
 	// We run rootCmd.Execute() directly in a goroutine rather than starting
 	// a subprocess to ensure the service manager tracks the correct PID
 	// and to allow for shared state/lifecycle management if needed.

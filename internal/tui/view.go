@@ -838,7 +838,7 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.pausing {
 		return lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(spinnerView + " Pausing...")
 	}
-	if d.resuming {
+	if d.resuming && d.started && !d.paused {
 		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
@@ -861,11 +861,12 @@ func (m RootModel) calcTotalSpeedBps() int64 {
 func (m RootModel) ComputeViewStats() ViewStats {
 	var stats ViewStats
 	for _, d := range m.downloads {
-		if d.done {
+		switch downloadTab(d) {
+		case TabDone:
 			stats.DownloadedCount++
-		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+		case TabActive:
 			stats.ActiveCount++
-		} else {
+		default:
 			stats.QueuedCount++
 		}
 		stats.TotalDownloaded += d.Downloaded
