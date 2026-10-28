@@ -141,6 +141,43 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		progState.SetDestPath(finalDestPath)
 	}
 
+	// Both downloaders open the working file with O_RDWR and rely on the
+	// processing layer having reserved it. A resume whose working file is gone
+	// (removed by cleanup, a failed enqueue, or the user) has no bytes to resume
+	// from, so restart it from zero instead of failing every attempt with ENOENT.
+	surgePath := finalDestPath + types.IncompleteSuffix
+	if isResume {
+		if _, statErr := os.Stat(surgePath); os.IsNotExist(statErr) {
+			utils.Debug("Resume working file missing for %s, restarting from zero", finalDestPath)
+			cfg.IsResume = false
+			cfg.Tasks = nil
+			cfg.ChunkBitmap = nil
+			cfg.ActualChunkSize = 0
+			cfg.Downloaded = 0
+			if progState != nil {
+				progState.SessionReset()
+			}
+			// Drop the checkpoint whose offsets describe the vanished file, or a
+			// later resume would write its tasks into the fresh one.
+			if checkpoint, err := store.LoadState(cfg.URL, finalDestPath); err == nil && checkpoint != nil && len(checkpoint.Tasks) > 0 {
+				checkpoint.Tasks = nil
+				checkpoint.ChunkBitmap = nil
+				checkpoint.ActualChunkSize = 0
+				checkpoint.Downloaded = 0
+				checkpoint.Elapsed = 0
+				checkpoint.FileHash = ""
+				if err := store.SaveStateWithOptions(cfg.URL, finalDestPath, checkpoint, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+					utils.Debug("Resume restart: failed to invalidate checkpoint: %v", err)
+				}
+			}
+		}
+	}
+	if working, err := os.OpenFile(surgePath, os.O_CREATE|os.O_RDWR, 0o644); err != nil {
+		return err
+	} else if err := working.Close(); err != nil {
+		utils.Debug("Resume restart: failed to close working file: %v", err)
+	}
+
 	currentRateLimit := func() (int64, bool) {
 		if progState != nil {
 			return progState.GetRateLimit()
