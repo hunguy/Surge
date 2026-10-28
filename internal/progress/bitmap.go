@@ -372,14 +372,17 @@ func (b *BitmapTracker) GetBitmapSnapshot(totalSize int64, includeProgress bool)
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	if len(b.chunkStatus) == 0 {
+	n := len(b.chunkStatus)
+	if n == 0 {
 		return nil, 0, 0, 0, nil
 	}
 
-	_, bytesNeeded, _ := bitmapLayout(totalSize, b.actualChunkSize)
-	result := make([]byte, bytesNeeded)
+	// Buffer and width both come from chunkStatus: deriving the buffer from the
+	// caller-supplied totalSize panics when TotalSize is stale/zero while the
+	// bitmap is already populated (e.g. a restarted download).
+	result := make([]byte, (n+3)/4)
 
-	for i := 0; i < b.width; i++ {
+	for i := 0; i < n; i++ {
 		status := b.chunkStatus[i].Load()
 		byteIndex := i / 4
 		bitOffset := (i % 4) * 2
